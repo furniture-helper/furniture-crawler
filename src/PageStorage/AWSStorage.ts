@@ -32,6 +32,10 @@ export default class AWSStorage extends PageStorage {
             const fileUrl = `https://${AWSStorage.bucket}.s3.${AWSStorage.region}.amazonaws.com/${key}`;
             logger.info(`Stored page at URL: ${this.url} to S3: ${fileUrl}`);
         } catch (err) {
+            logger.error(
+                `Failed to store page at URL: ${this.url} to S3 bucket ${AWSStorage.bucket} with key ${key}`,
+                err
+            );
             throw err;
         }
     }
