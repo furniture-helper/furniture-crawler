@@ -33,8 +33,8 @@ export default class AWSStorage extends PageStorage {
             logger.info(`Stored page at URL: ${this.url} to S3: ${fileUrl}`);
         } catch (err) {
             logger.error(
+                err,
                 `Failed to store page at URL: ${this.url} to S3 bucket ${AWSStorage.bucket} with key ${key}`,
-                err
             );
             throw err;
         }

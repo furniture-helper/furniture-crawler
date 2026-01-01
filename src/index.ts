@@ -9,10 +9,7 @@ async function main() {
 }
 
 main().catch((err) => {
-    const errorMessage =
-        err instanceof Error
-            ? err.stack || err.message
-            : String(err);
+    const errorMessage = err instanceof Error ? err.stack || err.message : String(err);
     logger.error(`Unhandled error in main: ${errorMessage}`);
     process.exit(1);
 });
