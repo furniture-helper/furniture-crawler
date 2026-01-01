@@ -55,7 +55,9 @@ function getPageStorageConstructor(): PageStorageConstructor {
 
     switch (pageStorage) {
         case 'LocalStorage':
-            return require('./storage/LocalStorage').default as PageStorageConstructor;
+            return require('./PageStorage/LocalStorage').default as PageStorageConstructor;
+        case 'AWSStorage':
+            return require('./PageStorage/AWSStorage').default as PageStorageConstructor;
         default:
             throw new Error(`Unknown PAGE_STORAGE type: ${pageStorage}`);
     }
