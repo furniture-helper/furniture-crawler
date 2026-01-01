@@ -16,7 +16,7 @@ export default class AWSStorage extends PageStorage {
         const pageHtml = await this.page.content();
 
         // Create a hash of the URL to ensure uniqueness
-        const urlHash = createHash('md5').update(this.url).digest('hex').substring(0, 8);
+        const urlHash = createHash('sha256').update(this.url).digest('hex').substring(0, 8);
         const safeFileName = this.url.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const key = `${safeFileName}_${urlHash}.html`;
 
@@ -39,7 +39,7 @@ export default class AWSStorage extends PageStorage {
                 {
                     err,
                     bucket: AWSStorage.bucket,
-                    key: key,
+                    key,
                 },
                 `Failed to store page at URL: ${this.url} to S3`,
             );
