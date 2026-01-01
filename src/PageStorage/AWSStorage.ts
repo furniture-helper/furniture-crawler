@@ -2,6 +2,7 @@ import { PageStorage } from './PageStorage';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import logger from '../Logger';
+import { createHash } from 'crypto';
 
 const DEFAULT_S3_BUCKET = 'furniture-crawler-storage';
 const DEFAULT_S3_REGION = 'eu-west-1';
@@ -14,8 +15,10 @@ export default class AWSStorage extends PageStorage {
     async store(): Promise<void> {
         const pageHtml = await this.page.content();
 
+        // Create a hash of the URL to ensure uniqueness
+        const urlHash = createHash('md5').update(this.url).digest('hex').substring(0, 8);
         const safeFileName = this.url.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const key = `${safeFileName}.html`;
+        const key = `${safeFileName}_${urlHash}.html`;
 
         const upload = new Upload({
             client: AWSStorage.s3,
@@ -33,8 +36,12 @@ export default class AWSStorage extends PageStorage {
             logger.info(`Stored page at URL: ${this.url} to S3: ${fileUrl}`);
         } catch (err) {
             logger.error(
-                `Failed to store page at URL: ${this.url} to S3 bucket ${AWSStorage.bucket} with key ${key}`,
-                err
+                {
+                    err,
+                    bucket: AWSStorage.bucket,
+                    key: key,
+                },
+                `Failed to store page at URL: ${this.url} to S3`,
             );
             throw err;
         }
