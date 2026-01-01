@@ -1,13 +1,14 @@
-import {Dataset, PlaywrightCrawler} from "crawlee";
-import {getMaxConcurrency, getMaxRequestsPerCrawl, getMaxRequestsPerMinute} from "./config";
+import {PlaywrightCrawler} from "crawlee";
+import {getMaxConcurrency, getMaxRequestsPerCrawl, getMaxRequestsPerMinute, getPageStorageConstructor} from "./config";
 import {getSpecialization} from "./specializations/Specialization";
-import {savePageSnapshot} from "./utils/file_utils";
 
 export default class Crawler {
 	
 	private readonly crawler: PlaywrightCrawler;
 	
 	constructor() {
+		const pageStorageConstructor = getPageStorageConstructor()
+		
 		this.crawler = new PlaywrightCrawler({
 			maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
 			maxConcurrency: getMaxConcurrency(),
@@ -21,17 +22,19 @@ export default class Crawler {
 					log.warning(`Network idle timeout for ${request.loadedUrl}`);
 				});
 				
+				log.info(`Parsing page: ${request.loadedUrl}`);
+				
+				// A specialization is a set of custom actions that will be applied to a page from a specific website.
+				// For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
 				const specialization = await getSpecialization(request.loadedUrl, page);
 				if (specialization) {
 					await specialization.apply();
 				}
 				
-				const title = await page.title();
-				log.info(`Parsing page: ${request.loadedUrl}`);
+				// Store the page using the selected storage mechanism
+				const storage = new pageStorageConstructor(request.loadedUrl, page);
+				await storage.store();
 				
-				await savePageSnapshot(request.loadedUrl, page);
-				
-				await Dataset.pushData({ title, url: request.loadedUrl });
 				await enqueueLinks();
 			}
 		});
