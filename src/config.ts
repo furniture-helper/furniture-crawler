@@ -1,7 +1,10 @@
-const DEFAULT_MAX_REQUESTS_PER_CRAWL = 999999;
+import {PageStorageConstructor} from "./storage/PageStorage";
+
+const DEFAULT_MAX_REQUESTS_PER_CRAWL = 10;
 const DEFAULT_MAX_CONCURRENCY = 5;
 const DEFAULT_MAX_REQUESTS_PER_MINUTE = 50;
 const DEFAULT_START_URL = 'https://buyabans.com';
+const DEFAULT_PAGE_STORAGE = "LocalStorage";
 
 function getMaxRequestsPerCrawl(): number {
 	const maxRequestsPerCrawl = process.env.MAX_REQUESTS_PER_CRAWL;
@@ -44,5 +47,19 @@ function getStartUrl(): string {
 	return DEFAULT_START_URL;
 }
 
+function getPageStorageConstructor(): PageStorageConstructor {
+	let pageStorage = process.env.PAGE_STORAGE;
+	if (!pageStorage || pageStorage.trim() === '') {
+		pageStorage = DEFAULT_PAGE_STORAGE;
+	}
+	
+	switch (pageStorage) {
+		case 'LocalStorage':
+			return require('./storage/LocalStorage').default as PageStorageConstructor;
+		default:
+			throw new Error(`Unknown PAGE_STORAGE type: ${pageStorage}`);
+	}
+}
 
-export { getMaxRequestsPerCrawl, getMaxConcurrency, getMaxRequestsPerMinute, getStartUrl };
+
+export { getMaxRequestsPerCrawl, getMaxConcurrency, getMaxRequestsPerMinute, getStartUrl, getPageStorageConstructor };
