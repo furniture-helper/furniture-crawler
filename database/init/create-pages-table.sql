@@ -1,0 +1,24 @@
+CREATE TABLE IF NOT EXISTS pages (
+    url TEXT PRIMARY KEY,
+    domain VARCHAR(100) NOT NULL,
+    s3_key TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_domain ON pages(domain);
+CREATE INDEX IF NOT EXISTS idx_pages_is_active ON pages(is_active);
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_updated_at
+BEFORE UPDATE ON pages
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at();
