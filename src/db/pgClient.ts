@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from 'pg';
+import logger from '../Logger';
 
 // These credentials are only used for local development and testing.
 const DEFAULT_PG_HOST = 'localhost';
@@ -20,3 +21,32 @@ const pool = new Pool({
 export async function getPgClient(): Promise<PoolClient> {
     return await pool.connect();
 }
+
+let isShuttingDown = false;
+
+async function closePool(): Promise<void> {
+    await pool.end();
+}
+
+async function gracefulShutdown(signal?: string, exitCode = 0): Promise<void> {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    try {
+        await closePool();
+    } catch (err) {
+        logger.error(err, 'Error closing pg pool.');
+        exitCode = exitCode || 1;
+    } finally {
+        if (typeof signal !== 'undefined') process.exit(exitCode);
+    }
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT', 0));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM', 0));
+process.on('beforeExit', () => gracefulShutdown(undefined, 0));
+process.on('uncaughtException', () => {
+    gracefulShutdown('uncaughtException', 1);
+});
+process.on('unhandledRejection', () => {
+    gracefulShutdown('unhandledRejection', 1);
+});
