@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 
+// These credentials are only used for local development and testing.
 const DEFAULT_PG_HOST = 'localhost';
 const DEFAULT_PG_PORT = 5432;
 const DEFAULT_PG_USER = 'furniture_crawler';
