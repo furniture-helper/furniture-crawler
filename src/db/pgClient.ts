@@ -16,6 +16,7 @@ const pool = new Pool({
     database: process.env.PG_DATABASE || DEFAULT_PG_DATABASE,
     max: 10,
     idleTimeoutMillis: 30000,
+    ssl: { rejectUnauthorized: false },
 });
 
 export async function getPgClient(): Promise<PoolClient> {
