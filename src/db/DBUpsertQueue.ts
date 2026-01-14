@@ -14,7 +14,7 @@ export default class DatabaseUpsertQueue {
     private static readonly CHUNK_SIZE: number = Number.parseInt(process.env.DB_UPSERT_CHUNK_SIZE ?? '100', 10) || 100;
     private static readonly MAX_QUEUE_SIZE: number =
         Number.parseInt(process.env.DB_UPSERT_MAX_QUEUE_SIZE ?? '1000', 10) || 1000;
-
+    private static rowIndex = 0;
     private static totalUpserted = 0;
 
     public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
@@ -36,7 +36,7 @@ export default class DatabaseUpsertQueue {
         });
         logger.debug(`DatabaseUpsert enqueued with url ${url}`);
 
-        if (DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE) {
+        if (DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.rowIndex + DatabaseUpsertQueue.MAX_QUEUE_SIZE) {
             logger.info(
                 `DatabaseUpsertQueue reached max size of ${DatabaseUpsertQueue.MAX_QUEUE_SIZE}. Processing queue.`,
             );
@@ -50,12 +50,26 @@ export default class DatabaseUpsertQueue {
         if (DatabaseUpsertQueue.processing) return;
         DatabaseUpsertQueue.processing = true;
         try {
-            while (DatabaseUpsertQueue.rows.length > 0) {
-                const chunk = DatabaseUpsertQueue.rows.slice(0, DatabaseUpsertQueue.CHUNK_SIZE);
+            while (DatabaseUpsertQueue.rows.length > DatabaseUpsertQueue.rowIndex) {
+                const chunk = DatabaseUpsertQueue.rows.slice(
+                    DatabaseUpsertQueue.rowIndex,
+                    DatabaseUpsertQueue.rowIndex + DatabaseUpsertQueue.CHUNK_SIZE,
+                );
                 if (chunk.length === 0) break;
 
-                const values = chunk.flatMap((r) => [r.url, r.domain, r.s3_key, true]);
-                const placeholders = chunk
+                const uniqueMap = new Map<string, PageRow>();
+                for (const r of chunk) uniqueMap.set(r.url, r);
+                const deduped = Array.from(uniqueMap.values());
+
+
+                if (deduped.length !== chunk.length) {
+                    logger.debug(
+                        `Deduplicated ${chunk.length - deduped.length} duplicate URLs in chunk before upsert.`,
+                    );
+                }
+
+                const values = deduped.flatMap((r) => [r.url, r.domain, r.s3_key, true]);
+                const placeholders = deduped
                     .map((_, idx) => `($${idx * 4 + 1}, $${idx * 4 + 2}, $${idx * 4 + 3}, $${idx * 4 + 4})`)
                     .join(', ');
 
@@ -70,21 +84,21 @@ export default class DatabaseUpsertQueue {
 
                 const dbClient = await getPgClient();
                 try {
-                    logger.debug(`Upserting ${chunk.length} rows into the database.`);
+                    logger.debug(`Upserting ${deduped.length} unique rows into database.`);
                     await dbClient.query('BEGIN');
                     await dbClient.query(text, values);
                     await dbClient.query('COMMIT');
 
-                    DatabaseUpsertQueue.rows.splice(0, chunk.length);
-                    logger.info(`Successfully upserted ${chunk.length} rows into the database.`);
+                    logger.info(`Successfully upserted ${deduped.length} rows into database.`);
 
-                    DatabaseUpsertQueue.totalUpserted += chunk.length;
-                    logger.info(`Total rows upserted so far: ${DatabaseUpsertQueue.totalUpserted}`);
+                    DatabaseUpsertQueue.totalUpserted += deduped.length;
+                    logger.info(`Total upserted count: ${DatabaseUpsertQueue.totalUpserted}`);
+
+                    DatabaseUpsertQueue.rowIndex += chunk.length;
                 } catch (err) {
-                    await dbClient.query('ROLLBACK').catch((rollbackErr) => {
-                        logger.error(rollbackErr, 'Error rolling back transaction after upsert failure.');
-                    });
-                    logger.error(err, 'Error upserting rows into the database.');
+                    await dbClient.query('ROLLBACK').catch(() => {});
+                    logger.error(err, 'Error upserting rows into database.');
+                    // do not remove rows so they can be retried
                     throw err;
                 } finally {
                     dbClient.release();
@@ -98,12 +112,12 @@ export default class DatabaseUpsertQueue {
     public static async flush(timeoutMs: number = 30000): Promise<void> {
         const start = Date.now();
 
-        if (!DatabaseUpsertQueue.processing && DatabaseUpsertQueue.rows.length > 0) {
+        if (!DatabaseUpsertQueue.processing && DatabaseUpsertQueue.rows.length > DatabaseUpsertQueue.rowIndex) {
             logger.info('Flushing DatabaseUpsertQueue...');
             DatabaseUpsertQueue.processQueue().catch((err) => logger.error(err));
         }
 
-        while (DatabaseUpsertQueue.processing || DatabaseUpsertQueue.rows.length > 0) {
+        while (DatabaseUpsertQueue.processing || DatabaseUpsertQueue.rows.length > DatabaseUpsertQueue.rowIndex) {
             if (Date.now() - start >= timeoutMs) {
                 throw new Error(
                     `Timeout after ${timeoutMs}ms waiting for DatabaseUpsertQueue.flush(). ` +
