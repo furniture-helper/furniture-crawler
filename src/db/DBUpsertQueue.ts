@@ -14,7 +14,8 @@ export default class DatabaseUpsertQueue {
     private static readonly CHUNK_SIZE: number = Number.parseInt(process.env.DB_UPSERT_CHUNK_SIZE ?? '100', 10) || 100;
     private static readonly MAX_QUEUE_SIZE: number =
         Number.parseInt(process.env.DB_UPSERT_MAX_QUEUE_SIZE ?? '1000', 10) || 1000;
-    private static readonly CLEANUP_THRESHOLD: number = 500; // Clean up processed rows when rowIndex reaches this threshold
+    private static readonly CLEANUP_THRESHOLD: number =
+        Number.parseInt(process.env.DB_UPSERT_CLEANUP_THRESHOLD ?? '500', 10) || 500;
     private static rowIndex = 0;
     private static totalUpserted = 0;
 
@@ -83,17 +84,29 @@ export default class DatabaseUpsertQueue {
                 `;
 
                 const dbClient = await getPgClient();
+                let commitSucceeded = false;
                 try {
                     logger.debug(`Upserting ${deduped.length} unique rows into database.`);
                     await dbClient.query('BEGIN');
                     await dbClient.query(text, values);
                     await dbClient.query('COMMIT');
+                    commitSucceeded = true;
 
                     logger.info(`Successfully upserted ${deduped.length} rows into database.`);
 
                     DatabaseUpsertQueue.totalUpserted += deduped.length;
                     logger.info(`Total upserted count: ${DatabaseUpsertQueue.totalUpserted}`);
+                } catch (err) {
+                    await dbClient.query('ROLLBACK').catch(() => {});
+                    logger.error(err, 'Error upserting rows into database.');
+                    // do not remove rows so they can be retried
+                    throw err;
+                } finally {
+                    dbClient.release();
+                }
 
+                // Only update rowIndex and perform cleanup after successful commit
+                if (commitSucceeded) {
                     DatabaseUpsertQueue.rowIndex += chunk.length;
 
                     // Periodically clean up processed rows to prevent memory leak
@@ -106,13 +119,6 @@ export default class DatabaseUpsertQueue {
                                 `Remaining queue size: ${DatabaseUpsertQueue.rows.length}`,
                         );
                     }
-                } catch (err) {
-                    await dbClient.query('ROLLBACK').catch(() => {});
-                    logger.error(err, 'Error upserting rows into database.');
-                    // do not remove rows so they can be retried
-                    throw err;
-                } finally {
-                    dbClient.release();
                 }
             }
         } finally {
