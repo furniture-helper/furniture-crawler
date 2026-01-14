@@ -37,7 +37,7 @@ export default class DatabaseUpsertQueue {
         logger.debug(`DatabaseUpsert enqueued with url ${url}`);
 
         if (DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE) {
-            logger.debug(
+            logger.info(
                 `DatabaseUpsertQueue reached max size of ${DatabaseUpsertQueue.MAX_QUEUE_SIZE}. Processing queue.`,
             );
             if (!DatabaseUpsertQueue.processing) {
@@ -76,8 +76,10 @@ export default class DatabaseUpsertQueue {
                     await dbClient.query('COMMIT');
 
                     DatabaseUpsertQueue.rows.splice(0, chunk.length);
+                    logger.info(`Successfully upserted ${chunk.length} rows into the database.`);
+
                     DatabaseUpsertQueue.totalUpserted += chunk.length;
-                    logger.debug(`Successfully upserted ${chunk.length} rows into the database.`);
+                    logger.info(`Total rows upserted so far: ${DatabaseUpsertQueue.totalUpserted}`);
                 } catch (err) {
                     await dbClient.query('ROLLBACK').catch((rollbackErr) => {
                         logger.error(rollbackErr, 'Error rolling back transaction after upsert failure.');
