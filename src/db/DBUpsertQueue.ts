@@ -64,7 +64,9 @@ export default class DatabaseUpsertQueue {
                     DatabaseUpsertQueue.rows.splice(0, chunk.length);
                     logger.debug(`Successfully upserted ${chunk.length} rows into the database.`);
                 } catch (err) {
-                    await dbClient.query('ROLLBACK').catch(() => {});
+                    await dbClient.query('ROLLBACK').catch((rollbackErr) => {
+                        logger.error(rollbackErr, 'Error rolling back transaction after upsert failure.');
+                    });
                     logger.error(err, 'Error upserting rows into the database.');
                     throw err;
                 } finally {
@@ -86,7 +88,11 @@ export default class DatabaseUpsertQueue {
 
         while (DatabaseUpsertQueue.processing || DatabaseUpsertQueue.rows.length > 0) {
             if (Date.now() - start >= timeoutMs) {
-                throw new Error('Timeout waiting for DatabaseUpsertQueue.flush()');
+                throw new Error(
+                    `Timeout after ${timeoutMs}ms waiting for DatabaseUpsertQueue.flush(). ` +
+                        `Queue still has ${DatabaseUpsertQueue.rows.length} items pending; ` +
+                        `processing=${DatabaseUpsertQueue.processing}.`,
+                );
             }
 
             await new Promise((r) => setTimeout(r, 100));
@@ -100,8 +106,7 @@ const gracefulShutdown = async (signal: string) => {
         await DatabaseUpsertQueue.flush(30000); // 30s timeout
         logger.info('DB upsert queue flushed, exiting.');
         process.exit(0);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
+    } catch {
         logger.warn('Failed to flush DB upsert queue before exit (timeout or error). Exiting anyway.');
         process.exit(1);
     }
