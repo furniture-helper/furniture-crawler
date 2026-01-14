@@ -61,7 +61,6 @@ export default class DatabaseUpsertQueue {
                 for (const r of chunk) uniqueMap.set(r.url, r);
                 const deduped = Array.from(uniqueMap.values());
 
-
                 if (deduped.length !== chunk.length) {
                     logger.debug(
                         `Deduplicated ${chunk.length - deduped.length} duplicate URLs in chunk before upsert.`,
