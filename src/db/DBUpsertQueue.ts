@@ -14,6 +14,7 @@ export default class DatabaseUpsertQueue {
     private static readonly CHUNK_SIZE: number = Number.parseInt(process.env.DB_UPSERT_CHUNK_SIZE ?? '100', 10) || 100;
     private static readonly MAX_QUEUE_SIZE: number =
         Number.parseInt(process.env.DB_UPSERT_MAX_QUEUE_SIZE ?? '1000', 10) || 1000;
+    private static readonly CLEANUP_THRESHOLD: number = 500; // Clean up processed rows when rowIndex reaches this threshold
     private static rowIndex = 0;
     private static totalUpserted = 0;
 
@@ -94,6 +95,17 @@ export default class DatabaseUpsertQueue {
                     logger.info(`Total upserted count: ${DatabaseUpsertQueue.totalUpserted}`);
 
                     DatabaseUpsertQueue.rowIndex += chunk.length;
+
+                    // Periodically clean up processed rows to prevent memory leak
+                    if (DatabaseUpsertQueue.rowIndex >= DatabaseUpsertQueue.CLEANUP_THRESHOLD) {
+                        const processedCount = DatabaseUpsertQueue.rowIndex;
+                        DatabaseUpsertQueue.rows = DatabaseUpsertQueue.rows.slice(DatabaseUpsertQueue.rowIndex);
+                        DatabaseUpsertQueue.rowIndex = 0;
+                        logger.debug(
+                            `Cleaned up ${processedCount} processed rows from queue. ` +
+                                `Remaining queue size: ${DatabaseUpsertQueue.rows.length}`,
+                        );
+                    }
                 } catch (err) {
                     await dbClient.query('ROLLBACK').catch(() => {});
                     logger.error(err, 'Error upserting rows into database.');
