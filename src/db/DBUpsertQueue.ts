@@ -18,8 +18,8 @@ export default class DatabaseUpsertQueue {
     private static rowsMutex = new Mutex();
     private static totalUpserted = 0;
 
-    public static enqueueUpsert(url: string, s3Key: string): void {
-        DatabaseUpsertQueue.rowsMutex.runExclusive(async () => {
+    public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
+        await DatabaseUpsertQueue.rowsMutex.runExclusive(async () => {
             const domain = getDomainFromUrl(url);
             DatabaseUpsertQueue.rows.push({ url, domain, s3_key: s3Key });
             logger.debug(`DatabaseUpsert enqueued with url ${url}`);
