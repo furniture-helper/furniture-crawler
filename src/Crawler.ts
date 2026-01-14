@@ -7,6 +7,7 @@ import {
 } from './config';
 
 import { getSpecialization } from './Specializations/Specialization';
+import logger from './Logger';
 
 export default class Crawler {
     private readonly crawler: PlaywrightCrawler;
@@ -19,15 +20,15 @@ export default class Crawler {
             maxConcurrency: getMaxConcurrency(),
             maxRequestsPerMinute: getMaxRequestsPerMinute(),
 
-            async requestHandler({ request, page, enqueueLinks, log }) {
+            async requestHandler({ request, page, enqueueLinks }) {
                 await page.waitForLoadState('load');
 
                 // wait for network to be idle (or timeout after 10 seconds)
                 await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
-                    log.warning(`Network idle timeout for ${request.loadedUrl}`);
+                    logger.warn(`Network idle timeout for ${request.loadedUrl}`);
                 });
 
-                log.info(`Parsing page: ${request.loadedUrl}`);
+                logger.info(`Parsing page: ${request.loadedUrl}`);
 
                 // A specialization is a set of custom actions that will be applied to a page from a specific website.
                 // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
