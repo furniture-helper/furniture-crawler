@@ -15,7 +15,9 @@ export default class DatabaseUpsertQueue {
     private static readonly MAX_QUEUE_SIZE: number =
         Number.parseInt(process.env.DB_UPSERT_MAX_QUEUE_SIZE ?? '1000', 10) || 1000;
 
-    public static enqueueUpsert(url: string, s3Key: string): void {
+    private static totalUpserted = 0;
+
+    public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
         const domain = getDomainFromUrl(url);
         DatabaseUpsertQueue.rows.push({
             url: url,
@@ -28,7 +30,9 @@ export default class DatabaseUpsertQueue {
             logger.debug(
                 `DatabaseUpsertQueue reached max size of ${DatabaseUpsertQueue.MAX_QUEUE_SIZE}. Processing queue.`,
             );
-            if (!DatabaseUpsertQueue.processing) DatabaseUpsertQueue.processQueue().catch((err) => logger.error(err));
+            if (!DatabaseUpsertQueue.processing) {
+                await DatabaseUpsertQueue.processQueue();
+            }
         }
     }
 
@@ -62,6 +66,7 @@ export default class DatabaseUpsertQueue {
                     await dbClient.query('COMMIT');
 
                     DatabaseUpsertQueue.rows.splice(0, chunk.length);
+                    DatabaseUpsertQueue.totalUpserted += chunk.length;
                     logger.debug(`Successfully upserted ${chunk.length} rows into the database.`);
                 } catch (err) {
                     await dbClient.query('ROLLBACK').catch((rollbackErr) => {
@@ -97,6 +102,10 @@ export default class DatabaseUpsertQueue {
 
             await new Promise((r) => setTimeout(r, 100));
         }
+    }
+
+    public static get totalUpsertedCount(): number {
+        return DatabaseUpsertQueue.totalUpserted;
     }
 }
 

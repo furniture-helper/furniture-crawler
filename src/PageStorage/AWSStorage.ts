@@ -45,6 +45,6 @@ export default class AWSStorage extends PageStorage {
     }
 
     private async upsertToDatabase(s3Key: string): Promise<void> {
-        DatabaseUpsertQueue.enqueueUpsert(this.url, s3Key);
+        await DatabaseUpsertQueue.enqueueUpsert(this.url, s3Key);
     }
 }
