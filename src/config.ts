@@ -1,8 +1,8 @@
 import { PageStorageConstructor } from './PageStorage/PageStorage';
 
 const DEFAULT_MAX_REQUESTS_PER_CRAWL = 10;
-const DEFAULT_MAX_CONCURRENCY = 5;
-const DEFAULT_MAX_REQUESTS_PER_MINUTE = 50;
+const DEFAULT_MAX_CONCURRENCY = 20;
+const DEFAULT_MAX_REQUESTS_PER_MINUTE = 100;
 const DEFAULT_START_URL = 'https://buyabans.com';
 const DEFAULT_PAGE_STORAGE = 'LocalStorage';
 
