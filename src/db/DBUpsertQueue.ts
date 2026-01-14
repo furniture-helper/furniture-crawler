@@ -40,6 +40,7 @@ export default class DatabaseUpsertQueue {
 
     private static async process(): Promise<void> {
         const startTime = Date.now();
+        logger.info(`Starting database upsert processing. Queue size: ${DatabaseUpsertQueue.rows.length}`);
         while (DatabaseUpsertQueue.rows.length > 0) {
             if (Date.now() - startTime > 30000) {
                 logger.warn('Database upsert processing time exceeded 30 seconds, aborting to avoid long lock.');
@@ -47,6 +48,11 @@ export default class DatabaseUpsertQueue {
             }
 
             const chunk = DatabaseUpsertQueue.rows.slice(0, DatabaseUpsertQueue.CHUNK_SIZE);
+            logger.info(
+                `Processing upsert chunk of size ${chunk.length}. Remaining queue size: ${
+                    DatabaseUpsertQueue.rows.length - chunk.length
+                }`,
+            );
             if (chunk.length === 0) break;
 
             const uniqueMap = new Map<string, PageRow>();
