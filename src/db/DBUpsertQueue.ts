@@ -19,6 +19,16 @@ export default class DatabaseUpsertQueue {
 
     public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
         const domain = getDomainFromUrl(url);
+
+        // wait for a maximum of 15 seconds if the queue is being processed
+        const start = Date.now();
+        while (DatabaseUpsertQueue.processing) {
+            if (Date.now() - start > 15000) {
+                throw new Error('Timeout waiting for DatabaseUpsertQueue to be free for enqueueing.');
+            }
+            await new Promise((r) => setTimeout(r, 100));
+        }
+
         DatabaseUpsertQueue.rows.push({
             url: url,
             domain: domain,
