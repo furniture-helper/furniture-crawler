@@ -25,7 +25,7 @@ export default class DatabaseUpsertQueue {
             logger.debug(`DatabaseUpsert enqueued with url ${url}`);
 
             // Process the queue if it exceeds the max size or at every 30-minute interval
-            const isCurrentTimeA30MinuteInterval = Math.floor(Date.now() / 60000) % 10 === 0;
+            const isCurrentTimeA30MinuteInterval = Math.floor(Date.now() / 60000) % 30 === 0;
             if (
                 DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE &&
                 isCurrentTimeA30MinuteInterval
