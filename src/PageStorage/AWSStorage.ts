@@ -2,8 +2,7 @@ import { PageStorage } from './PageStorage';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import logger from '../Logger';
-import { getPgClient } from '../db/pgClient';
-import { getDomainFromUrl } from '../utils/url_utils';
+import DatabaseUpsertQueue from '../db/DBUpsertQueue';
 
 const DEFAULT_S3_BUCKET = 'furniture-crawler-storage';
 const DEFAULT_S3_REGION = 'eu-west-1';
@@ -46,24 +45,6 @@ export default class AWSStorage extends PageStorage {
     }
 
     private async upsertToDatabase(s3Key: string): Promise<void> {
-        const query = `
-            INSERT INTO pages (url, domain, s3_key, is_active)
-            VALUES ($1, $2, $3, true)
-            ON CONFLICT (url) DO UPDATE
-            SET s3_key = EXCLUDED.s3_key,
-                is_active = true;
-        `;
-        const values = [this.url, getDomainFromUrl(this.url), s3Key];
-
-        const dbClient = await getPgClient();
-        try {
-            await dbClient.query(query, values);
-            logger.info(`Upserted page record for URL: ${this.url} into database.`);
-        } catch (err) {
-            logger.error(err, `Failed to upsert page record for URL: ${this.url} into database.`);
-            throw err;
-        } finally {
-            dbClient.release();
-        }
+        await DatabaseUpsertQueue.enqueueUpsert(this.url, s3Key);
     }
 }
