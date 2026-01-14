@@ -24,11 +24,11 @@ export default class DatabaseUpsertQueue {
             DatabaseUpsertQueue.rows.push({ url, domain, s3_key: s3Key });
             logger.debug(`DatabaseUpsert enqueued with url ${url}`);
 
-            // If the queue size exceeds the max limit, process the queue at the next 10-minute interval
-            const isCurrentTimeA10MinuteInterval = Math.floor(Date.now() / 60000) % 10 === 0;
+            // Process the queue if it exceeds the max size or at every 30-minute interval
+            const isCurrentTimeA30MinuteInterval = Math.floor(Date.now() / 60000) % 30 === 0;
             if (
                 DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE &&
-                isCurrentTimeA10MinuteInterval
+                isCurrentTimeA30MinuteInterval
             ) {
                 logger.info(
                     `Database upsert queue size ${DatabaseUpsertQueue.rows.length} exceeded max limit of ${DatabaseUpsertQueue.MAX_QUEUE_SIZE}. Processing queue...`,
