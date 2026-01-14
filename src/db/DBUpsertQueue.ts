@@ -34,7 +34,13 @@ export default class DatabaseUpsertQueue {
     }
 
     private static async process(): Promise<void> {
+        const startTime = Date.now();
         while (DatabaseUpsertQueue.rows.length > 0) {
+            if (Date.now() - startTime > 30000) {
+                logger.warn('Database upsert processing time exceeded 30 seconds, aborting to avoid long lock.');
+                break;
+            }
+
             const chunk = DatabaseUpsertQueue.rows.slice(0, DatabaseUpsertQueue.CHUNK_SIZE);
             if (chunk.length === 0) break;
 
@@ -83,31 +89,9 @@ export default class DatabaseUpsertQueue {
         }
     }
 
-    public static async flush(timeoutMs: number = 30000): Promise<void> {
-        const start = Date.now();
-        DatabaseUpsertQueue.rowsMutex.runExclusive(async () => {
-            if (DatabaseUpsertQueue.rows.length === 0) {
-                logger.info('Database upsert queue is empty, nothing to flush.');
-                return;
-            }
-
-            logger.info('Flushing database upsert queue...');
-            const flushPromise = DatabaseUpsertQueue.process();
-
-            if (timeoutMs > 0) {
-                const timeoutPromise = new Promise<void>((_, reject) => {
-                    setTimeout(() => {
-                        reject(new Error('Timeout while flushing database upsert queue.'));
-                    }, timeoutMs);
-                });
-
-                await Promise.race([flushPromise, timeoutPromise]);
-            } else {
-                await flushPromise;
-            }
-
-            const duration = Date.now() - start;
-            logger.info(`Database upsert queue flushed in ${duration} ms.`);
+    public static async flush(): Promise<void> {
+        await DatabaseUpsertQueue.rowsMutex.runExclusive(async () => {
+            await DatabaseUpsertQueue.process();
         });
     }
 
@@ -119,8 +103,8 @@ export default class DatabaseUpsertQueue {
 const gracefulShutdown = async (signal: string) => {
     try {
         logger.info(`Received ${signal}, flushing DB upsert queue before exit...`);
-        // Force flush during graceful shutdown even if the queue hasn't exceeded the limit
-        await DatabaseUpsertQueue.flush(30000); // 30s timeout
+        await DatabaseUpsertQueue.flush();
+
         logger.info('DB upsert queue flushed, exiting.');
         process.exit(0);
     } catch (error) {
@@ -135,7 +119,7 @@ process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 process.once('beforeExit', async () => {
     try {
         // don't force start here; only attempt to flush if the queue already exceeded the limit
-        await DatabaseUpsertQueue.flush(5000);
+        await DatabaseUpsertQueue.flush();
     } finally {
         // reference the getter so it's not flagged as unused by static analysis
         logger.info(`Total pages upserted to DB: ${DatabaseUpsertQueue.totalUpsertedCount}`);
