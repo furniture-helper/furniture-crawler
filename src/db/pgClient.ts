@@ -16,7 +16,7 @@ const pool = new Pool({
     database: process.env.PG_DATABASE || DEFAULT_PG_DATABASE,
     max: 10,
     idleTimeoutMillis: 30000,
-    ssl: { rejectUnauthorized: false },
+    ssl: process.env.DISABLE_DB_SSL == 'true' ? false : { rejectUnauthorized: false },
 });
 
 export async function getPgClient(): Promise<PoolClient> {
@@ -33,6 +33,10 @@ async function gracefulShutdown(signal?: string, exitCode = 0): Promise<void> {
     if (isShuttingDown) return;
     isShuttingDown = true;
     try {
+        logger.info(`Received ${signal ?? 'exit event'}. Waiting 15 seconds before closing pg pool.`);
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+
+        logger.info(`Received ${signal ?? 'exit event'}. Closing pg pool.`);
         await closePool();
     } catch (err) {
         logger.error(err, 'Error closing pg pool.');
