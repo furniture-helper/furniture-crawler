@@ -26,7 +26,7 @@ export default class DatabaseUpsertQueue {
 
             const isCurrentTimeA10MinuteInterval = Math.floor(Date.now() / 60000) % 10 === 0;
             if (
-                DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE &&
+                DatabaseUpsertQueue.rows.length >= DatabaseUpsertQueue.MAX_QUEUE_SIZE ||
                 isCurrentTimeA10MinuteInterval
             ) {
                 logger.info(
