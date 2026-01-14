@@ -56,16 +56,16 @@ export default class DatabaseUpsertQueue {
 
                 const dbClient = await getPgClient();
                 try {
-                    logger.debug(`Upserting ${chunk.length} rows into database.`);
+                    logger.debug(`Upserting ${chunk.length} rows into the database.`);
                     await dbClient.query('BEGIN');
                     await dbClient.query(text, values);
                     await dbClient.query('COMMIT');
 
                     DatabaseUpsertQueue.rows.splice(0, chunk.length);
-                    logger.debug(`Successfully upserted ${chunk.length} rows into database.`);
+                    logger.debug(`Successfully upserted ${chunk.length} rows into the database.`);
                 } catch (err) {
                     await dbClient.query('ROLLBACK').catch(() => {});
-                    logger.error(err, 'Error upserting rows into database.');
+                    logger.error(err, 'Error upserting rows into the database.');
                     throw err;
                 } finally {
                     dbClient.release();
@@ -80,6 +80,7 @@ export default class DatabaseUpsertQueue {
         const start = Date.now();
 
         if (!DatabaseUpsertQueue.processing && DatabaseUpsertQueue.rows.length > 0) {
+            logger.info('Flushing DatabaseUpsertQueue...');
             DatabaseUpsertQueue.processQueue().catch((err) => logger.error(err));
         }
 
