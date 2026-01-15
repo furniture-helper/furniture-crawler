@@ -102,8 +102,9 @@ export default class Crawler {
 
                     await page.evaluate(() => {
                         const resolveToAbsolute = (attrName: string, propName: string) => {
-                            const elements = document.querySelectorAll(`[${attrName}]`);
+                            const selector = attrName === 'src' ? `[${attrName}]:not(script)` : `[${attrName}]`;
 
+                            const elements = document.querySelectorAll(selector);
                             elements.forEach((el) => {
                                 const element = el as any;
 

@@ -20,6 +20,8 @@ export default class DatabaseUpsertQueue {
 
     public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
         const domain = getDomainFromUrl(url);
+        logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
+
         const query = `
             INSERT INTO pages (url, domain, s3_key, is_active)
             VALUES ($1, $2, $3, true)
@@ -30,8 +32,12 @@ export default class DatabaseUpsertQueue {
         `;
         const values = [url, domain, s3Key];
 
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
         const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing upsert for URL: ${url}`);
+
         try {
+            logger.debug(`Executing upsert query for URL: ${url}`);
             await dbClient.query(query, values);
             DatabaseUpsertQueue.totalUpserted += 1;
             logger.info(`Upserted URL ${url} into database. Total upserted: ${DatabaseUpsertQueue.totalUpserted}`);
@@ -39,6 +45,7 @@ export default class DatabaseUpsertQueue {
             logger.error(err, `Error upserting URL ${url} into database.`);
             throw err;
         } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
             dbClient.release();
         }
         // await DatabaseUpsertQueue.rowsMutex.runExclusive(async () => {
