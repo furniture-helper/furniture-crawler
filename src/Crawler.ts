@@ -1,4 +1,4 @@
-import { PlaywrightCrawler } from 'crawlee';
+import { PlaywrightCrawler, playwrightUtils } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -16,11 +16,23 @@ export default class Crawler {
         const pageStorageConstructor = getPageStorageConstructor();
 
         this.crawler = new PlaywrightCrawler({
+            headless: true,
             maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
             maxConcurrency: getMaxConcurrency(),
             maxRequestsPerMinute: getMaxRequestsPerMinute(),
 
             preNavigationHooks: [
+                // Wait for DOM content to be loaded before proceeding
+                (context, gotoOptions) => {
+                    gotoOptions.waitUntil = 'domcontentloaded';
+                },
+
+                // Block unnecessary resources to speed up crawling
+                async ({ page }) => {
+                    // This single line blocks images, fonts, css, and media
+                    await playwrightUtils.blockRequests(page);
+                },
+
                 // Intercept responses to detect downloads via headers
                 async ({ page, request }) => {
                     await page.route(request.url, async (route) => {
@@ -66,14 +78,18 @@ export default class Crawler {
                     return;
                 }
 
+                const startTime = Date.now();
+
+                logger.info(`Parsing page: ${request.loadedUrl}`);
+                await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
                 await page.waitForLoadState('load');
 
                 // wait for network to be idle (or timeout after 10 seconds)
-                await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
-                    logger.warn(`Network idle timeout for ${request.loadedUrl}`);
-                });
+                // await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
+                //     logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+                // });
 
-                logger.info(`Parsing page: ${request.loadedUrl}`);
+                logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
                 // A specialization is a set of custom actions that will be applied to a page from a specific website.
                 // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
