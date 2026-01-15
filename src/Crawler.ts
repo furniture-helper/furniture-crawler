@@ -127,6 +127,7 @@ export default class Crawler {
                         logger.debug(`Resolving relative data URLs to absolute for page: ${window.location.href}`);
                         resolveToAbsolute('data', 'data');
                     });
+                    logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
 
                     // A specialization is a set of custom actions that will be applied to a page from a specific website.
                     // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
