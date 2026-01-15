@@ -142,7 +142,7 @@ export default class Crawler {
             new Configuration({
                 availableMemoryRatio: 0.8,
                 maxUsedCpuRatio: 0.8,
-                disableBrowserSandbox: true
+                disableBrowserSandbox: true,
             }),
         );
     }
