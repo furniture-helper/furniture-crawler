@@ -100,11 +100,6 @@ export default class Crawler {
                     logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
                     await page.evaluate(() => {
-                        /**
-                         * Generic function to replace relative paths with absolute ones.
-                         * @param attrName The HTML attribute (e.g., 'href', 'src')
-                         * @param propName The DOM property that holds the absolute URL (usually same as attrName)
-                         */
                         const resolveToAbsolute = (attrName: string, propName: string) => {
                             const elements = document.querySelectorAll(`[${attrName}]`);
 
@@ -124,18 +119,22 @@ export default class Crawler {
                         resolveToAbsolute('action', 'action');
                         resolveToAbsolute('data', 'data');
                     });
+                    logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
 
                     // A specialization is a set of custom actions that will be applied to a page from a specific website.
                     // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
                     const specialization = await getSpecialization(request.loadedUrl, page);
                     if (specialization) {
+                        logger.debug(`Resolving specialization for ${request.loadedUrl}`);
                         await specialization.apply();
                     }
 
                     // Store the page using the selected storage mechanism
+                    logger.debug(`Working on storing page: ${request.loadedUrl}`);
                     const storage = new pageStorageConstructor(request.loadedUrl, page);
                     await storage.store();
 
+                    logger.debug(`Enqueuing links found on page: ${request.loadedUrl}`);
                     await enqueueLinks();
                 },
             },
