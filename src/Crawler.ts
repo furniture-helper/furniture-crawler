@@ -25,6 +25,7 @@ export default class Crawler {
                     desiredConcurrencyRatio: 0.8,
                     maxConcurrency: getMaxConcurrency(),
                 },
+                requestHandlerTimeoutSecs: 120,
 
                 preNavigationHooks: [
                     // Wait for DOM content to be loaded before proceeding
