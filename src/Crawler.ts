@@ -115,16 +115,9 @@ export default class Crawler {
                             });
                         };
 
-                        logger.debug(`Resolving relative href URLs to absolute for page: ${window.location.href}`);
                         resolveToAbsolute('href', 'href');
-
-                        logger.debug(`Resolving relative src URLs to absolute for page: ${window.location.href}`);
                         resolveToAbsolute('src', 'src');
-
-                        logger.debug(`Resolving relative action URLs to absolute for page: ${window.location.href}`);
                         resolveToAbsolute('action', 'action');
-
-                        logger.debug(`Resolving relative data URLs to absolute for page: ${window.location.href}`);
                         resolveToAbsolute('data', 'data');
                     });
                     logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
