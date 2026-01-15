@@ -1,4 +1,4 @@
-import {PlaywrightCrawler, playwrightUtils} from 'crawlee';
+import { PlaywrightCrawler, playwrightUtils } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
