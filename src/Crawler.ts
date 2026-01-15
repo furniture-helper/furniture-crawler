@@ -43,6 +43,14 @@ export default class Crawler {
 
                 await enqueueLinks();
             },
+
+            async errorHandler({ request, error: Error }) {
+                const error = Error as Error;
+                if (error.message.includes('Download is starting')) {
+                    logger.info(`Skipping download: ${request.url}`);
+                    request.noRetry = true;
+                }
+            },
         });
     }
 
