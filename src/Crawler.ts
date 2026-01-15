@@ -1,4 +1,4 @@
-import { PlaywrightCrawler } from 'crawlee';
+import { PlaywrightCrawler, playwrightUtils } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -16,19 +16,80 @@ export default class Crawler {
         const pageStorageConstructor = getPageStorageConstructor();
 
         this.crawler = new PlaywrightCrawler({
+            headless: true,
             maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
             maxConcurrency: getMaxConcurrency(),
             maxRequestsPerMinute: getMaxRequestsPerMinute(),
 
+            preNavigationHooks: [
+                // Wait for DOM content to be loaded before proceeding
+                (context, gotoOptions) => {
+                    gotoOptions.waitUntil = 'domcontentloaded';
+                },
+
+                // Block unnecessary resources to speed up crawling
+                async ({ page }) => {
+                    // This single line blocks images, fonts, css, and media
+                    await playwrightUtils.blockRequests(page);
+                },
+
+                // Intercept responses to detect downloads via headers
+                async ({ page, request }) => {
+                    await page.route(request.url, async (route) => {
+                        try {
+                            // Fetch the response manually to check headers
+                            const response = await route.fetch();
+                            const headers = response.headers();
+
+                            // Check triggers: "attachment" in disposition OR common file types
+                            const contentDisposition = headers['content-disposition'] || '';
+                            const contentType = headers['content-type'] || '';
+
+                            const isDownload =
+                                contentDisposition.includes('attachment') ||
+                                /application\/pdf|application\/zip|application\/octet-stream/.test(contentType);
+
+                            if (isDownload) {
+                                logger.info(`Download detected (${contentType}): ${request.url}`);
+                                request.noRetry = true;
+                                request.userData = { ...(request.userData || {}), isDownload: true };
+                                request.skipNavigation = true;
+
+                                // Fulfill with a simple response to skip actual download
+                                await route.fulfill({
+                                    status: 200,
+                                    contentType: 'text/html; charset=utf-8',
+                                    body: '<html><body>Download skipped</body></html>',
+                                });
+                            } else {
+                                await route.fulfill({ response });
+                            }
+                        } catch {
+                            // If the manual fetch fails (e.g. network error), let default behavior take over
+                            route.continue().catch(() => {});
+                        }
+                    });
+                },
+            ],
+
             async requestHandler({ request, page, enqueueLinks }) {
+                if (request.userData?.isDownload) {
+                    logger.info(`Skipping processing for download URL: ${request.url}`);
+                    return;
+                }
+
+                const startTime = Date.now();
+
+                logger.info(`Parsing page: ${request.loadedUrl}`);
+                await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
                 await page.waitForLoadState('load');
 
                 // wait for network to be idle (or timeout after 10 seconds)
-                await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
-                    logger.warn(`Network idle timeout for ${request.loadedUrl}`);
-                });
+                // await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
+                //     logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+                // });
 
-                logger.info(`Parsing page: ${request.loadedUrl}`);
+                logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
                 // A specialization is a set of custom actions that will be applied to a page from a specific website.
                 // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
@@ -42,14 +103,6 @@ export default class Crawler {
                 await storage.store();
 
                 await enqueueLinks();
-            },
-
-            async errorHandler({ request, error: Error }) {
-                const error = Error as Error;
-                if (error.message.includes('Download is starting')) {
-                    logger.info(`Skipping download: ${request.url}`);
-                    request.noRetry = true;
-                }
             },
         });
     }
