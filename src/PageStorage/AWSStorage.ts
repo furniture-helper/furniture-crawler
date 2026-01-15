@@ -13,10 +13,17 @@ export default class AWSStorage extends PageStorage {
     private static readonly s3: S3Client = new S3Client({ region: AWSStorage.region });
 
     async store(): Promise<void> {
+        logger.debug(`Storing page at URL: ${this.url} to S3 bucket: ${AWSStorage.bucket}`);
+
+        logger.debug(`Fetching page content for URL: ${this.url}`);
         const pageHtml = await this.page.content();
         const safeFileName = this.url.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const key = `${safeFileName}.html`;
+
+        logger.debug(`Uploading page content for URL: ${this.url} to S3 with key: ${key}`);
         await this.uploadToS3(key, pageHtml);
+
+        logger.debug(`Upserting database record for URL: ${this.url} with S3 key: ${key}`);
         await this.upsertToDatabase(key);
     }
 
