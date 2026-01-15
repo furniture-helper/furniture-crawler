@@ -84,12 +84,41 @@ export default class Crawler {
                 await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
                 await page.waitForLoadState('load');
 
+                // Wait 5s just in case some JS needs to run
+                await page.waitForTimeout(5000);
+
                 // wait for network to be idle (or timeout after 10 seconds)
-                // await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
-                //     logger.warn(`Network idle timeout for ${request.loadedUrl}`);
-                // });
+                await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
+                    logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+                });
 
                 logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
+
+                await page.evaluate(() => {
+                    /**
+                     * Generic function to replace relative paths with absolute ones.
+                     * @param attrName The HTML attribute (e.g., 'href', 'src')
+                     * @param propName The DOM property that holds the absolute URL (usually same as attrName)
+                     */
+                    const resolveToAbsolute = (attrName: string, propName: string) => {
+                        const elements = document.querySelectorAll(`[${attrName}]`);
+
+                        elements.forEach((el) => {
+                            const element = el as any;
+
+                            const absoluteUrl = element[propName];
+
+                            if (typeof absoluteUrl === 'string' && absoluteUrl.trim() !== '') {
+                                element.setAttribute(attrName, absoluteUrl);
+                            }
+                        });
+                    };
+
+                    resolveToAbsolute('href', 'href');
+                    resolveToAbsolute('src', 'src');
+                    resolveToAbsolute('action', 'action');
+                    resolveToAbsolute('data', 'data');
+                });
 
                 // A specialization is a set of custom actions that will be applied to a page from a specific website.
                 // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
