@@ -12,7 +12,7 @@ import logger from './Logger';
 export default class Crawler {
     private readonly crawler: PlaywrightCrawler;
 
-    constructor() {
+    constructor(completedCallback: (url: string) => Promise<void>) {
         const pageStorageConstructor = getPageStorageConstructor();
 
         this.crawler = new PlaywrightCrawler(
@@ -78,7 +78,7 @@ export default class Crawler {
                     },
                 ],
 
-                async requestHandler({ request, page, enqueueLinks }) {
+                async requestHandler({ request, page }) {
                     if (request.userData?.isDownload) {
                         logger.info(`Skipping processing for download URL: ${request.url}`);
                         return;
@@ -136,8 +136,8 @@ export default class Crawler {
                     const storage = new pageStorageConstructor(request.loadedUrl, page);
                     await storage.store();
 
-                    logger.debug(`Enqueuing links found on page: ${request.loadedUrl}`);
-                    await enqueueLinks();
+                    await completedCallback(request.url);
+                    logger.info(`Completed processing for page: ${request.loadedUrl}`);
                 },
             },
             new Configuration({
@@ -148,8 +148,12 @@ export default class Crawler {
         );
     }
 
-    public async run(startUrl: string) {
-        await this.crawler.run([startUrl]);
+    public async run() {
+        await this.crawler.run();
+    }
+
+    public async add(url: string) {
+        await this.crawler.addRequests([url]);
     }
 
     public stop(reason: string) {
