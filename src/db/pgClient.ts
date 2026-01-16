@@ -30,7 +30,7 @@ async function closePool(): Promise<void> {
     await pool.end();
 }
 
-async function gracefulShutdown(signal?: string, exitCode = 0): Promise<void> {
+export async function gracefulShutdown(signal?: string): Promise<void> {
     if (isShuttingDown) return;
     isShuttingDown = true;
     try {
@@ -41,18 +41,15 @@ async function gracefulShutdown(signal?: string, exitCode = 0): Promise<void> {
         await closePool();
     } catch (err) {
         logger.error(err, 'Error closing pg pool.');
-        exitCode = exitCode || 1;
-    } finally {
-        if (typeof signal !== 'undefined') process.exit(exitCode);
     }
 }
 
-process.on('SIGINT', () => gracefulShutdown('SIGINT', 0));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM', 0));
-process.on('beforeExit', () => gracefulShutdown(undefined, 0));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('beforeExit', () => gracefulShutdown(undefined));
 process.on('uncaughtException', () => {
-    gracefulShutdown('uncaughtException', 1);
+    gracefulShutdown('uncaughtException');
 });
 process.on('unhandledRejection', () => {
-    gracefulShutdown('unhandledRejection', 1);
+    gracefulShutdown('unhandledRejection');
 });

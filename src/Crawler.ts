@@ -151,4 +151,8 @@ export default class Crawler {
     public async run(startUrl: string) {
         await this.crawler.run([startUrl]);
     }
+
+    public stop(reason: string) {
+        this.crawler.stop(reason);
+    }
 }
