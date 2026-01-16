@@ -90,7 +90,6 @@ export default class Crawler {
                     await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
                     await page.waitForLoadState('load');
 
-
                     // wait for network to be idle (or timeout after 5 seconds)
                     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
                         logger.warn(`Network idle timeout for ${request.loadedUrl}`);
