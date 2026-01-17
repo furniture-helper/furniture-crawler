@@ -72,14 +72,6 @@ export default class Crawler {
                         });
                     },
 
-                    async ({ page }) => {
-                        await page.route('**/*', async (route) => {
-                            const headers = route.request().headers();
-                            delete headers['cookie']; // Prevent sending cookies
-                            await route.continue({ headers });
-                        });
-                    },
-
                     // Intercept responses to detect downloads via headers
                     async ({ page, request }) => {
                         await page.route(request.url, async (route) => {
