@@ -9,6 +9,14 @@ import {
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 
+Configuration.set('systemInfoV2', true);
+Configuration.set('memoryMbytes', 16384);
+Configuration.set('containerized', true);
+Configuration.set('availableMemoryRatio', 0.8);
+Configuration.set('maxUsedCpuRatio', 0.8);
+Configuration.set('disableBrowserSandbox', true);
+Configuration.set('containerized', true);
+
 export default class Crawler {
     private readonly crawler: PlaywrightCrawler;
 
@@ -135,12 +143,16 @@ export default class Crawler {
 
                     await completedCallback(request.url);
                     logger.info(`Completed processing for page: ${request.loadedUrl}`);
+                    await page.close();
                 },
             },
             new Configuration({
                 availableMemoryRatio: 0.8,
                 maxUsedCpuRatio: 0.8,
                 disableBrowserSandbox: true,
+                memoryMbytes: 16384,
+                systemInfoV2: true,
+                containerized: true,
             }),
         );
     }
