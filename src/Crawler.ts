@@ -33,7 +33,9 @@ export default class Crawler {
                     desiredConcurrencyRatio: 0.8,
                     maxConcurrency: getMaxConcurrency(),
                 },
-                requestHandlerTimeoutSecs: 120,
+                requestHandlerTimeoutSecs: 20,
+                persistCookiesPerSession: false,
+                navigationTimeoutSecs: 10,
 
                 preNavigationHooks: [
                     // Wait for DOM content to be loaded before proceeding
@@ -45,6 +47,37 @@ export default class Crawler {
                     async ({ page }) => {
                         // This single line blocks images, fonts, css, and media
                         await playwrightUtils.blockRequests(page);
+                    },
+
+                    async ({ blockRequests }) => {
+                        await blockRequests({
+                            // Blocks images, css, and fonts by default.
+                            // You can add custom ad-server patterns here:
+                            extraUrlPatterns: [
+                                'googletagservices.com',
+                                'doubleclick.net',
+                                'adsbygoogle.js',
+                                'facebook.net',
+                            ],
+                        });
+                    },
+
+                    async ({ page }) => {
+                        await page.route('**/*', (route) => {
+                            const type = route.request().resourceType();
+                            if (type === 'sub_frame') {
+                                return route.abort(); // Blocks all iframes
+                            }
+                            return route.continue();
+                        });
+                    },
+
+                    async ({ page }) => {
+                        await page.route('**/*', async (route) => {
+                            const headers = route.request().headers();
+                            delete headers['cookie']; // Prevent sending cookies
+                            await route.continue({ headers });
+                        });
                     },
 
                     // Intercept responses to detect downloads via headers
@@ -144,6 +177,7 @@ export default class Crawler {
                     await completedCallback(request.url);
                     logger.info(`Completed processing for page: ${request.loadedUrl}`);
                     await page.close();
+                    logger.debug(`Closed page: ${request.loadedUrl}`);
                 },
             },
             new Configuration({
