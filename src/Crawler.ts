@@ -10,7 +10,7 @@ import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 
 Configuration.set('systemInfoV2', true);
-Configuration.set('memoryMbytes', 16384);
+Configuration.set('memoryMbytes', 8192);
 Configuration.set('containerized', true);
 Configuration.set('availableMemoryRatio', 0.8);
 Configuration.set('maxUsedCpuRatio', 0.8);
@@ -174,7 +174,7 @@ export default class Crawler {
                 availableMemoryRatio: 0.8,
                 maxUsedCpuRatio: 0.8,
                 disableBrowserSandbox: true,
-                memoryMbytes: 16384,
+                memoryMbytes: 8192,
                 systemInfoV2: true,
                 containerized: true,
             }),
