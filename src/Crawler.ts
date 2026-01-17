@@ -176,8 +176,6 @@ export default class Crawler {
 
                     await completedCallback(request.url);
                     logger.info(`Completed processing for page: ${request.loadedUrl}`);
-                    await page.close();
-                    logger.debug(`Closed page: ${request.loadedUrl}`);
                 },
             },
             new Configuration({
