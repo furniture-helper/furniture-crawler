@@ -75,9 +75,18 @@ async function main() {
     try {
         logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
         await timeout(crawler.run(), timeOutDuration);
+
+        logger.info(`Crawl completed successfully, exiting...`);
+        process.exit(0);
     } catch (error) {
         if (error === TIMEOUT_MESSAGE) {
+            logger.info(`Crawl timed out after ${timeOutDuration} ms, stopping crawler...`);
             crawler.stop('TIMEOUT');
+
+            //wait 15s
+            logger.info(`Waiting 15s before exiting to allow for graceful shutdown...`);
+            await new Promise((resolve) => setTimeout(resolve, 15000));
+
             process.exit(0);
         }
         throw error;
