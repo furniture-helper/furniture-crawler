@@ -1,6 +1,5 @@
 import Crawler from './Crawler';
 import logger from './Logger';
-import { gracefulShutdown } from './db/pgClient';
 import { Queue } from './CrawlerQueue/Queue';
 import { getMaxRequestsPerCrawl } from './config';
 
@@ -79,7 +78,6 @@ async function main() {
     } catch (error) {
         if (error === TIMEOUT_MESSAGE) {
             crawler.stop('TIMEOUT');
-            await gracefulShutdown('TIMEOUT');
             process.exit(0);
         }
         throw error;
