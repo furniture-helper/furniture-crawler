@@ -40,6 +40,20 @@ export default class Crawler {
                 navigationTimeoutSecs: 30,
 
                 preNavigationHooks: [
+                    // Handle blacklisted URLs
+                    async ({ request }) => {
+                        if (Crawler.isBlacklistedUrl(request.url)) {
+                            logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
+                            request.noRetry = true;
+                            request.userData = { ...(request.userData || {}), isDownload: true };
+                            request.skipNavigation = true;
+
+                            // Remove from database
+                            await DatabaseUpsertQueue.removeFromDatabase(request.url);
+                            await completedCallback(request.url);
+                        }
+                    },
+
                     // Wait for DOM content to be loaded before proceeding
                     (context, gotoOptions) => {
                         gotoOptions.waitUntil = 'domcontentloaded';
@@ -113,20 +127,6 @@ export default class Crawler {
                                 route.continue().catch(() => {});
                             }
                         });
-                    },
-
-                    // Handle blacklisted URLs
-                    async ({ request }) => {
-                        if (Crawler.isBlacklistedUrl(request.url)) {
-                            logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
-                            request.noRetry = true;
-                            request.userData = { ...(request.userData || {}), isDownload: true };
-                            request.skipNavigation = true;
-
-                            // Remove from database
-                            await DatabaseUpsertQueue.removeFromDatabase(request.url);
-                            await completedCallback(request.url);
-                        }
                     },
                 ],
 
