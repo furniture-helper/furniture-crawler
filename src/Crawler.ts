@@ -8,6 +8,8 @@ import {
 
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
+import DatabaseUpsertQueue from './db/DBUpsertQueue';
+import { Page } from 'playwright';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('memoryMbytes', 8192);
@@ -94,6 +96,9 @@ export default class Crawler {
                                     request.userData = { ...(request.userData || {}), isDownload: true };
                                     request.skipNavigation = true;
 
+                                    // Remove from database
+                                    await DatabaseUpsertQueue.removeFromDatabase(request.url);
+
                                     // Fulfill with a simple response to skip actual download
                                     await route.fulfill({
                                         status: 200,
@@ -130,6 +135,14 @@ export default class Crawler {
 
                     logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
+                    // Check if the page is considered "useless" and should not be crawled
+                    if (await Crawler.isUselessPage(request.loadedUrl, page)) {
+                        logger.info(`Skipping useless page: ${request.loadedUrl}`);
+                        await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
+                        return;
+                    }
+
+                    // Resolve all relative URLs to absolute URLs
                     await page.evaluate(() => {
                         const resolveToAbsolute = (attrName: string, propName: string) => {
                             const selector = attrName === 'src' ? `[${attrName}]:not(script)` : `[${attrName}]`;
@@ -168,6 +181,10 @@ export default class Crawler {
 
                     await completedCallback(request.url);
                     logger.info(`Completed processing for page: ${request.loadedUrl}`);
+
+                    await Crawler.addNewUrls(request.loadedUrl, page).catch((err) => {
+                        logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
+                    });
                 },
             },
             new Configuration({
@@ -179,6 +196,46 @@ export default class Crawler {
                 containerized: true,
             }),
         );
+    }
+
+    private static async addNewUrls(sourceUrl: string, page: Page) {
+        const currentHost = new URL(sourceUrl).hostname;
+
+        const sameDomainUrls = await page.$$eval(
+            'a[href]',
+            (anchors: HTMLAnchorElement[], host: string) =>
+                Array.from(
+                    new Set(
+                        anchors
+                            .map((a) => a.href.split('#')[0]) // remove fragments
+                            .filter(Boolean)
+                            .filter((h) => {
+                                try {
+                                    return new URL(h).hostname === host;
+                                } catch {
+                                    return false;
+                                }
+                            }),
+                    ),
+                ),
+            currentHost,
+        );
+        logger.info(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
+
+        for (let url of sameDomainUrls) {
+            DatabaseUpsertQueue.checkAndInsertNewUrl(url).catch((err) => {
+                logger.error(err, `Error checking/inserting URL: ${url}`);
+            });
+        }
+    }
+
+    private static async isUselessPage(url: string, page: Page): Promise<boolean> {
+        const pageText = (await page.textContent('body')) || '';
+        if (pageText.trim().length < 50) {
+            logger.info(`Page at ${url} deemed useless due to insufficient text content.`);
+            return true;
+        }
+        return false;
     }
 
     public async run() {
