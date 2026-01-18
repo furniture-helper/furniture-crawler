@@ -1,6 +1,6 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
 import logger from '../Logger';
-import {getMaxRequestsPerCrawl} from "../config";
+import { getMaxRequestsPerCrawl } from '../config';
 
 export type Message = {
     url: string;
