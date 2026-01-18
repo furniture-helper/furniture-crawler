@@ -98,7 +98,7 @@ export default class Crawler {
 
                                     // Remove from database
                                     await DatabaseUpsertQueue.removeFromDatabase(request.url);
-
+                                    await completedCallback(request.url);
                                     // Fulfill with a simple response to skip actual download
                                     await route.fulfill({
                                         status: 200,
@@ -114,11 +114,24 @@ export default class Crawler {
                             }
                         });
                     },
+
+                    // Handle blacklisted URLs
+                    async ({ request }) => {
+                        if (Crawler.isBlacklistedUrl(request.url)) {
+                            logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
+                            request.noRetry = true;
+                            request.userData = { ...(request.userData || {}), isDownload: true };
+                            request.skipNavigation = true;
+
+                            // Remove from database
+                            await DatabaseUpsertQueue.removeFromDatabase(request.url);
+                            await completedCallback(request.url);
+                        }
+                    },
                 ],
 
                 async requestHandler({ request, page }) {
                     if (request.userData?.isDownload) {
-                        logger.info(`Skipping processing for download URL: ${request.url}`);
                         return;
                     }
 
@@ -139,6 +152,7 @@ export default class Crawler {
                     if (await Crawler.isUselessPage(request.loadedUrl, page)) {
                         logger.info(`Skipping useless page: ${request.loadedUrl}`);
                         await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
+                        await completedCallback(request.url);
                         return;
                     }
 
@@ -223,6 +237,7 @@ export default class Crawler {
         logger.info(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
 
         for (let url of sameDomainUrls) {
+            if (Crawler.isBlacklistedUrl(url)) continue;
             DatabaseUpsertQueue.checkAndInsertNewUrl(url).catch((err) => {
                 logger.error(err, `Error checking/inserting URL: ${url}`);
             });
@@ -235,6 +250,31 @@ export default class Crawler {
             logger.info(`Page at ${url} deemed useless due to insufficient text content.`);
             return true;
         }
+        return false;
+    }
+
+    private static isBlacklistedUrl(url: string): boolean {
+        const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
+        const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
+        const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
+
+        const blacklistedPatterns = [
+            /\/login\/?$/i,
+            /\/signup\/?$/i,
+            /\/register\/?$/i,
+            /\/cart\/?$/i,
+            /\/checkout\/?$/i,
+            /\/user\/profile\/?$/i,
+            wishListPattern,
+            addToCartPattern,
+            brochureDownloadPattern,
+        ];
+        const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
+        if (matchesPattern) {
+            logger.debug(`URL ${url} is blacklisted based on predefined patterns.`);
+            return true;
+        }
+
         return false;
     }
 
