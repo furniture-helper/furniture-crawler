@@ -17,6 +17,7 @@ export default class AWSStorage extends PageStorage {
 
         logger.debug(`Fetching page content for URL: ${this.url}`);
         const pageHtml = await this.page.content();
+
         const safeFileName = this.url.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const key = `${safeFileName}.html`;
 

@@ -77,6 +77,11 @@ async function main() {
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);
+
+        // wait 10s
+        logger.info(`Waiting 10s before exiting to allow for graceful shutdown...`);
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+
         process.exit(0);
     } catch (error) {
         if (error === TIMEOUT_MESSAGE) {

@@ -1,5 +1,6 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
 import logger from '../Logger';
+import { getMaxRequestsPerCrawl } from '../config';
 
 export type Message = {
     url: string;
@@ -22,10 +23,13 @@ export class Queue {
 
     async getMessages(): Promise<Message[]> {
         logger.debug('Getting messages from SQS queue');
+
+        const desired = Math.ceil(getMaxRequestsPerCrawl() / 10);
+        const maxNumberOfMessages = Math.max(1, desired);
         const messages = await this.client.send(
             new ReceiveMessageCommand({
                 QueueUrl: this.sqsUrl,
-                MaxNumberOfMessages: 10,
+                MaxNumberOfMessages: maxNumberOfMessages,
                 WaitTimeSeconds: 20,
             }),
         );
