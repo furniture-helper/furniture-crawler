@@ -257,6 +257,10 @@ export default class Crawler {
         const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
         const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
         const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
+        const sharePattern = /(?:[?&]|^)share=([^&]+)(?:&|$)/i;
+        const wooComparePattern =
+            /(?=.*[?&]action=yith-woocompare-add-product(?:&|$))(?=.*[?&]id=(?<id>\d+)(?:&|$)).*/i;
+        const addToWishlistQueryPattern = /(?:[?&]|^)add_to_wishlist=(\d+)(?:&|$)/i;
 
         const blacklistedPatterns = [
             /\/login\/?$/i,
@@ -268,6 +272,9 @@ export default class Crawler {
             wishListPattern,
             addToCartPattern,
             brochureDownloadPattern,
+            sharePattern,
+            wooComparePattern,
+            addToWishlistQueryPattern,
         ];
         const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
         if (matchesPattern) {
