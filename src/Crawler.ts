@@ -254,6 +254,21 @@ export default class Crawler {
     }
 
     private static isBlacklistedUrl(url: string): boolean {
+        const doesUrlContainQueryParam = url.includes('?') || url.includes('&');
+        if (doesUrlContainQueryParam) {
+            logger.debug(`URL ${url} is blacklisted due to containing query parameters.`);
+            return true;
+        }
+
+        const doesUrlContainExtension =
+            /\.(jpg|jpeg|png|gif|bmp|svg|webp|mp4|mp3|avi|mov|wmv|flv|mkv|pdf|docx?|xlsx?|pptx?|zip|rar|7z)(?:[?#]|$)/i.test(
+                url,
+            );
+        if (doesUrlContainExtension) {
+            logger.debug(`URL ${url} is blacklisted due to containing a file extension.`);
+            return true;
+        }
+
         const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
         const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
         const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
