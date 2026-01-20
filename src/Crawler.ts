@@ -261,7 +261,7 @@ export default class Crawler {
         }
 
         const doesUrlContainExtension =
-            /\.(jpg|jpeg|png|gif|bmp|svg|webp|mp4|mp3|avi|mov|wmv|flv|mkv|pdf|docx?|xlsx?|pptx?|zip|rar|7z)(?:[?#]|$)/i.test(
+            /\.(jpg|jpeg|png|gif|bmp|svg|webp|mp4|mp3|avi|mov|wmv|flv|mkv|pdf|docx?|xlsx?|pptx?|zip|rar|7z|avif)(?:[?#]|$)/i.test(
                 url,
             );
         if (doesUrlContainExtension) {
