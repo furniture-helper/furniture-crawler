@@ -203,7 +203,7 @@ export default class Crawler {
 
                 failedRequestHandler: async ({ request, error }) => {
                     logger.error(error, `Request failed for ${request.url}`);
-                    await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
+                    await DatabaseUpsertQueue.removeFromDatabase(request.url);
                     await completedCallback(request.url);
                 },
             },
