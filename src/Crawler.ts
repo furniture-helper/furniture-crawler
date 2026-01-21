@@ -200,6 +200,12 @@ export default class Crawler {
                         logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
                     });
                 },
+
+                failedRequestHandler: async ({ request, error }) => {
+                    logger.error(error, `Request failed for ${request.url}`);
+                    await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
+                    await completedCallback(request.url);
+                },
             },
             new Configuration({
                 availableMemoryRatio: 0.8,
