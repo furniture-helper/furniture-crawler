@@ -1,4 +1,11 @@
-import { Configuration, PlaywrightCrawler, playwrightUtils } from 'crawlee';
+import {
+    BrowserName,
+    Configuration,
+    DeviceCategory,
+    OperatingSystemsName,
+    PlaywrightCrawler,
+    playwrightUtils,
+} from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -10,6 +17,8 @@ import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
 import { Page } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('memoryMbytes', 8192);
@@ -19,15 +28,32 @@ Configuration.set('maxUsedCpuRatio', 0.8);
 Configuration.set('disableBrowserSandbox', true);
 Configuration.set('containerized', true);
 
+chromium.use(StealthPlugin());
+
 export default class Crawler {
     private readonly crawler: PlaywrightCrawler;
 
-    constructor(completedCallback: (url: string) => Promise<void>) {
+    constructor(completedCallback: (url: string) => Promise<void>, _: any) {
         const pageStorageConstructor = getPageStorageConstructor();
 
         this.crawler = new PlaywrightCrawler(
             {
-                headless: true,
+                launchContext: {
+                    launcher: chromium,
+                    // launchOptions: launchOptions,
+                },
+                browserPoolOptions: {
+                    useFingerprints: true,
+                    fingerprintOptions: {
+                        fingerprintGeneratorOptions: {
+                            browsers: [{ name: BrowserName.chrome, minVersion: 120 }],
+                            devices: [DeviceCategory.desktop],
+                            operatingSystems: [OperatingSystemsName.windows],
+                            locales: ['en-US'],
+                        },
+                    },
+                },
+                headless: false,
                 maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
                 maxConcurrency: getMaxConcurrency(),
                 maxRequestsPerMinute: getMaxRequestsPerMinute(),
@@ -89,48 +115,31 @@ export default class Crawler {
                     },
 
                     // Intercept responses to detect downloads via headers
-                    async ({ page, request }) => {
-                        await page.route(request.url, async (route) => {
-                            try {
-                                // Fetch the response manually to check headers
-                                const response = await route.fetch();
-                                const headers = response.headers();
+                ],
 
-                                // Check triggers: "attachment" in disposition OR common file types
-                                const contentDisposition = headers['content-disposition'] || '';
-                                const contentType = headers['content-type'] || '';
-
-                                const isDownload =
-                                    contentDisposition.includes('attachment') ||
-                                    /application\/pdf|application\/zip|application\/octet-stream/.test(contentType);
-
-                                if (isDownload) {
-                                    logger.info(`Download detected (${contentType}): ${request.url}`);
-                                    request.noRetry = true;
-                                    request.userData = { ...(request.userData || {}), isDownload: true };
-                                    request.skipNavigation = true;
-
-                                    // Remove from database
-                                    await DatabaseUpsertQueue.removeFromDatabase(request.url);
-                                    await completedCallback(request.url);
-                                    // Fulfill with a simple response to skip actual download
-                                    await route.fulfill({
-                                        status: 200,
-                                        contentType: 'text/html; charset=utf-8',
-                                        body: '<html><body>Download skipped</body></html>',
-                                    });
-                                } else {
-                                    await route.fulfill({ response });
-                                }
-                            } catch {
-                                // If the manual fetch fails (e.g. network error), let default behavior take over
-                                route.continue().catch(() => {});
-                            }
-                        });
+                postNavigationHooks: [
+                    async ({ handleCloudflareChallenge }) => {
+                        await handleCloudflareChallenge();
                     },
                 ],
 
                 async requestHandler({ request, page }) {
+                    // page.on('response', async (response) => {
+                    //     const url = response.url();
+                    //     const headers = response.headers();
+                    //     const contentType = headers['content-type'] || '';
+                    //     const contentDisposition = headers['content-disposition'] || '';
+                    //
+                    //     const isDownload =
+                    //         contentDisposition.includes('attachment') ||
+                    //         /application\/pdf|application\/zip|application\/octet-stream/.test(contentType);
+                    //
+                    //     if (isDownload && url === request.url) {
+                    //         logger.info(`Download detected: ${url}`);
+                    //         await DatabaseUpsertQueue.removeFromDatabase(url);
+                    //     }
+                    // });
+
                     if (request.userData?.isDownload) {
                         return;
                     }
@@ -199,6 +208,15 @@ export default class Crawler {
                     await Crawler.addNewUrls(request.loadedUrl, page).catch((err) => {
                         logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
                     });
+                },
+
+                errorHandler: async ({ request }, error) => {
+                    const retryCount = request.retryCount;
+                    const backoffDelay = Math.pow(2, retryCount) * 5000;
+
+                    logger.debug(`Retry #${retryCount + 1} for ${request.url}. Sleeping ${backoffDelay}ms`);
+                    await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+                    logger.warn(error, `Error processing ${request.url}, retrying...`);
                 },
 
                 failedRequestHandler: async ({ request, error }) => {
