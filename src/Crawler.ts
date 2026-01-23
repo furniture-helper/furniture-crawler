@@ -87,47 +87,6 @@ export default class Crawler {
                             return route.continue();
                         });
                     },
-
-                    // Intercept responses to detect downloads via headers
-                    async ({ page, request }) => {
-                        await page.route(request.url, async (route) => {
-                            try {
-                                // Fetch the response manually to check headers
-                                const response = await route.fetch();
-                                const headers = response.headers();
-
-                                // Check triggers: "attachment" in disposition OR common file types
-                                const contentDisposition = headers['content-disposition'] || '';
-                                const contentType = headers['content-type'] || '';
-
-                                const isDownload =
-                                    contentDisposition.includes('attachment') ||
-                                    /application\/pdf|application\/zip|application\/octet-stream/.test(contentType);
-
-                                if (isDownload) {
-                                    logger.info(`Download detected (${contentType}): ${request.url}`);
-                                    request.noRetry = true;
-                                    request.userData = { ...(request.userData || {}), isDownload: true };
-                                    request.skipNavigation = true;
-
-                                    // Remove from database
-                                    await DatabaseUpsertQueue.removeFromDatabase(request.url);
-                                    await completedCallback(request.url);
-                                    // Fulfill with a simple response to skip actual download
-                                    await route.fulfill({
-                                        status: 200,
-                                        contentType: 'text/html; charset=utf-8',
-                                        body: '<html><body>Download skipped</body></html>',
-                                    });
-                                } else {
-                                    await route.fulfill({ response });
-                                }
-                            } catch {
-                                // If the manual fetch fails (e.g. network error), let default behavior take over
-                                route.continue().catch(() => {});
-                            }
-                        });
-                    },
                 ],
 
                 async requestHandler({ request, page }) {
