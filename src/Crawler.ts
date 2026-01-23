@@ -234,6 +234,25 @@ export default class Crawler {
             return true;
         }
 
+        const allowed_domains = [
+            'www.damro.lk',
+            'www.singersl.com',
+            'strong.lk',
+            'singhagiri.lk',
+            'ugreen.lk',
+            'mysoftlogic.lk',
+            'raesl.lk',
+            'www.nanotek.lk',
+            'lifemobile.lk',
+            'fireworks.lk',
+            'www.simplytek.lk',
+        ];
+        const urlObj = new URL(url);
+        if (!allowed_domains.includes(urlObj.hostname.toLowerCase())) {
+            logger.debug(`URL ${url} is blacklisted due to not being in allowed domains.`);
+            return true;
+        }
+
         const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
         const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
         const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
@@ -243,6 +262,7 @@ export default class Crawler {
         const addToWishlistQueryPattern = /(?:[?&]|^)add_to_wishlist=(\d+)(?:&|$)/i;
 
         const blacklistedPatterns = [
+            /\/auth\/?$/i,
             /\/login\/?$/i,
             /\/signup\/?$/i,
             /\/register\/?$/i,
