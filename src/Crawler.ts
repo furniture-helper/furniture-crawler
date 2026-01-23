@@ -10,6 +10,7 @@ import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
 import { Page } from 'playwright';
+import { getDomainFromUrl } from './utils/url_utils';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('memoryMbytes', 8192);
@@ -247,8 +248,7 @@ export default class Crawler {
             'fireworks.lk',
             'www.simplytek.lk',
         ];
-        const urlObj = new URL(url);
-        if (!allowed_domains.includes(urlObj.hostname.toLowerCase())) {
+        if (!allowed_domains.includes(getDomainFromUrl(url))) {
             logger.debug(`URL ${url} is blacklisted due to not being in allowed domains.`);
             return true;
         }
