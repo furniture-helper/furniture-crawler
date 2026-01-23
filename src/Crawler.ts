@@ -10,6 +10,7 @@ import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
 import { Page } from 'playwright';
+import { getDomainFromUrl } from './utils/url_utils';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('memoryMbytes', 8192);
@@ -234,6 +235,24 @@ export default class Crawler {
             return true;
         }
 
+        const allowed_domains = [
+            'www.damro.lk',
+            'www.singersl.com',
+            'strong.lk',
+            'singhagiri.lk',
+            'ugreen.lk',
+            'mysoftlogic.lk',
+            'raesl.lk',
+            'www.nanotek.lk',
+            'lifemobile.lk',
+            'fireworks.lk',
+            'www.simplytek.lk',
+        ];
+        if (!allowed_domains.includes(getDomainFromUrl(url))) {
+            logger.debug(`URL ${url} is blacklisted due to not being in allowed domains.`);
+            return true;
+        }
+
         const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
         const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
         const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
@@ -243,6 +262,7 @@ export default class Crawler {
         const addToWishlistQueryPattern = /(?:[?&]|^)add_to_wishlist=(\d+)(?:&|$)/i;
 
         const blacklistedPatterns = [
+            /\/auth\/?$/i,
             /\/login\/?$/i,
             /\/signup\/?$/i,
             /\/register\/?$/i,
