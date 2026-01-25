@@ -247,6 +247,8 @@ export default class Crawler {
             'lifemobile.lk',
             'fireworks.lk',
             'www.simplytek.lk',
+            'www.agc.lk',
+            'www.redlinetech.lk',
         ];
         if (!allowed_domains.includes(getDomainFromUrl(url))) {
             logger.debug(`URL ${url} is blacklisted due to not being in allowed domains.`);
