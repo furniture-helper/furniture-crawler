@@ -3,7 +3,7 @@ import logger from '../Logger';
 import { getDomainFromUrl } from './url_utils';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
 import { PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
-import { deleteFromQueue } from '../index';
+import { Queue } from '../CrawlerQueue/Queue';
 
 export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
     if (isBlacklistedUrl(request.url)) {
@@ -14,7 +14,7 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
 
         // Remove from database
         await DatabaseUpsertQueue.removeFromDatabase(request.url);
-        await deleteFromQueue(request.url);
+        await Queue.deleteMessage(request.url);
     }
 }
 

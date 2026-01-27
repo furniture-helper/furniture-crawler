@@ -19,7 +19,7 @@ import {
     resolveToAbsoluteUrls,
     waitForDomContentLoaded,
 } from './utils/crawler_utils';
-import { deleteFromQueue } from './index';
+import { Queue } from './CrawlerQueue/Queue';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -74,15 +74,13 @@ export default class Crawler {
 
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
-            await DatabaseUpsertQueue.removeFromDatabase(request.url);
-            await deleteFromQueue(request.url);
+            await this.removeFromDatabaseAndQueue(request.url);
             return;
         }
 
         if (!request.loadedUrl) {
             logger.error(`No loaded URL for request: ${request.url}`);
-            await DatabaseUpsertQueue.removeFromDatabase(request.url);
-            await deleteFromQueue(request.url);
+            await this.removeFromDatabaseAndQueue(request.url);
             return;
         }
 
@@ -105,13 +103,9 @@ export default class Crawler {
         // Check if the page is considered "useless" and should not be crawled
         if (await isUselessPage(request.loadedUrl, page)) {
             logger.info(`Skipping useless page: ${request.loadedUrl}`);
-            await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
-            await deleteFromQueue(request.url);
+            await this.removeFromDatabaseAndQueue(request.url);
             return;
         }
-
-        await resolveToAbsoluteUrls(page);
-        logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
 
         // A specialization is a set of custom actions that will be applied to a page from a specific website.
         // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
@@ -121,12 +115,15 @@ export default class Crawler {
             await specialization.apply();
         }
 
+        await resolveToAbsoluteUrls(page);
+        logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
+
         // Store the page using the selected storage mechanism
         logger.debug(`Working on storing page: ${request.loadedUrl}`);
         const storage = new this.pageStorageConstructor(request.loadedUrl, page);
         await storage.store();
 
-        await deleteFromQueue(request.url);
+        await Queue.deleteMessage(request.url);
         logger.info(`Completed processing for page: ${request.loadedUrl}`);
 
         await addNewUrls(request.loadedUrl, page).catch((err) => {
@@ -136,7 +133,11 @@ export default class Crawler {
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
         logger.error(error, `Request failed for ${request.url}`);
-        await DatabaseUpsertQueue.removeFromDatabase(request.url);
-        await deleteFromQueue(request.url);
+        await this.removeFromDatabaseAndQueue(request.url);
+    }
+
+    private async removeFromDatabaseAndQueue(url: string): Promise<void> {
+        await DatabaseUpsertQueue.removeFromDatabase(url);
+        await Queue.deleteMessage(url);
     }
 }
