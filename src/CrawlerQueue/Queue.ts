@@ -58,7 +58,7 @@ export class Queue {
 
         const receiptHandle = this.receiptHandles.get(url);
         if (!receiptHandle) {
-            logger.warn(`Receipt Handle ${url} not found.`);
+            logger.warn(`Receipt Handle for ${url} not found.`);
             return;
         }
         logger.debug(`Deleting message with receipt handle: ${receiptHandle}`);
