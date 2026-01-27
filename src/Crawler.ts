@@ -3,7 +3,9 @@ import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
     getMaxRequestsPerMinute,
+    getNavigationTimeoutSecs,
     getPageStorageConstructor,
+    getRequestHandlerTimeoutSecs,
 } from './config';
 
 import { getSpecialization } from './Specializations/Specialization';
@@ -37,9 +39,9 @@ export default class Crawler {
             desiredConcurrencyRatio: 0.8,
             maxConcurrency: getMaxConcurrency(),
         },
-        requestHandlerTimeoutSecs: 30,
+        requestHandlerTimeoutSecs: getRequestHandlerTimeoutSecs(),
         persistCookiesPerSession: true,
-        navigationTimeoutSecs: 30,
+        navigationTimeoutSecs: getNavigationTimeoutSecs(),
     };
 
     private readonly pageStorageConstructor = getPageStorageConstructor();
