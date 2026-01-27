@@ -136,3 +136,27 @@ export async function isUselessPage(url: string, page: Page): Promise<boolean> {
     }
     return false;
 }
+
+export async function resolveToAbsoluteUrls(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        const resolveToAbsolute = (attrName: string, propName: string) => {
+            const selector = attrName === 'src' ? `[${attrName}]:not(script)` : `[${attrName}]`;
+
+            const elements = document.querySelectorAll(selector);
+            elements.forEach((el) => {
+                const element = el as any;
+
+                const absoluteUrl = element[propName];
+
+                if (typeof absoluteUrl === 'string' && absoluteUrl.trim() !== '') {
+                    element.setAttribute(attrName, absoluteUrl);
+                }
+            });
+        };
+
+        resolveToAbsolute('href', 'href');
+        resolveToAbsolute('src', 'src');
+        resolveToAbsolute('action', 'action');
+        resolveToAbsolute('data', 'data');
+    });
+}

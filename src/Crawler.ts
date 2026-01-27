@@ -16,6 +16,7 @@ import {
     blockUnnecessaryResources,
     checkForBlackListedUrl,
     isUselessPage,
+    resolveToAbsoluteUrls,
     waitForDomContentLoaded,
 } from './utils/crawler_utils';
 import { deleteFromQueue } from './index';
@@ -88,7 +89,10 @@ export default class Crawler {
         const startTime = Date.now();
 
         logger.info(`Parsing page: ${request.loadedUrl}`);
+
+        // Abort loading of unnecessary resources to speed up page load
         await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
+
         await page.waitForLoadState('load');
 
         // wait for network to be idle (or timeout after 5 seconds)
@@ -106,28 +110,7 @@ export default class Crawler {
             return;
         }
 
-        // Resolve all relative URLs to absolute URLs
-        await page.evaluate(() => {
-            const resolveToAbsolute = (attrName: string, propName: string) => {
-                const selector = attrName === 'src' ? `[${attrName}]:not(script)` : `[${attrName}]`;
-
-                const elements = document.querySelectorAll(selector);
-                elements.forEach((el) => {
-                    const element = el as any;
-
-                    const absoluteUrl = element[propName];
-
-                    if (typeof absoluteUrl === 'string' && absoluteUrl.trim() !== '') {
-                        element.setAttribute(attrName, absoluteUrl);
-                    }
-                });
-            };
-
-            resolveToAbsolute('href', 'href');
-            resolveToAbsolute('src', 'src');
-            resolveToAbsolute('action', 'action');
-            resolveToAbsolute('data', 'data');
-        });
+        await resolveToAbsoluteUrls(page);
         logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
 
         // A specialization is a set of custom actions that will be applied to a page from a specific website.
