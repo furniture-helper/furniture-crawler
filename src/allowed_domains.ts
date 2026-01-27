@@ -1,0 +1,15 @@
+const ALLOWED_DOMAINS = [
+    'www.damro.lk',
+    'www.singersl.com',
+    'strong.lk',
+    'singhagiri.lk',
+    'ugreen.lk',
+    'mysoftlogic.lk',
+    'raesl.lk',
+    'www.nanotek.lk',
+    'lifemobile.lk',
+    'fireworks.lk',
+    'www.simplytek.lk',
+    'www.agc.lk',
+    'www.redlinetech.lk',
+];
