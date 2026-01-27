@@ -7,12 +7,7 @@ export default class DatabaseUpsertQueue {
     private static totalUpserted = 0;
     private static checkedUrls: Set<string> = new Set<string>();
 
-    public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
-        if (isBlacklistedUrl(url)) {
-            logger.info(`URL ${url} is blacklisted. Skipping upsert.`);
-            return;
-        }
-
+    public static async upsertPage(url: string, s3Key: string): Promise<void> {
         const domain = getDomainFromUrl(url);
         logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
 

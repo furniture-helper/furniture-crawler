@@ -122,7 +122,6 @@ export async function addNewUrls(sourceUrl: string, page: Page) {
     logger.info(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
 
     for (let url of sameDomainUrls) {
-        if (isBlacklistedUrl(url)) continue;
         DatabaseUpsertQueue.checkAndInsertNewUrl(url).catch((err) => {
             logger.error(err, `Error checking/inserting URL: ${url}`);
         });
