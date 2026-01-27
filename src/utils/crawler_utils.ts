@@ -4,6 +4,7 @@ import { getDomainFromUrl } from './url_utils';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
 import { PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
 import { Queue } from '../CrawlerQueue/Queue';
+import { ALLOWED_DOMAINS } from '../allowed_domains';
 
 export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
     if (isBlacklistedUrl(request.url)) {

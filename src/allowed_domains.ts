@@ -1,4 +1,4 @@
-const ALLOWED_DOMAINS = [
+export const ALLOWED_DOMAINS = [
     'www.damro.lk',
     'www.singersl.com',
     'strong.lk',
