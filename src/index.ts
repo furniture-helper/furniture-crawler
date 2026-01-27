@@ -22,7 +22,7 @@ async function main() {
     logger.info(`Initializing crawler...`);
     const crawler = new Crawler();
 
-    logger.info(`Inisitalizing queue...`);
+    logger.info(`Initializing queue...`);
     Queue.init();
 
     let totalRequestsQueued = 0;
