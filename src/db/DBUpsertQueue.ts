@@ -1,12 +1,13 @@
 import { getDomainFromUrl } from '../utils/url_utils';
 import { getPgClient } from './pgClient';
 import logger from '../Logger';
+import { isBlacklistedUrl } from '../utils/crawler_utils';
 
 export default class DatabaseUpsertQueue {
     private static totalUpserted = 0;
     private static checkedUrls: Set<string> = new Set<string>();
 
-    public static async enqueueUpsert(url: string, s3Key: string): Promise<void> {
+    public static async upsertPage(url: string, s3Key: string): Promise<void> {
         const domain = getDomainFromUrl(url);
         logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
 
@@ -41,8 +42,12 @@ export default class DatabaseUpsertQueue {
         if (DatabaseUpsertQueue.checkedUrls.has(url)) {
             return;
         }
-
         DatabaseUpsertQueue.checkedUrls.add(url);
+
+        if (isBlacklistedUrl(url)) {
+            logger.info(`URL ${url} is blacklisted. Skipping insertion.`);
+            return;
+        }
 
         const domain = getDomainFromUrl(url);
         const query = `
