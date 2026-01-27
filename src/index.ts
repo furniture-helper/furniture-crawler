@@ -6,9 +6,6 @@ import { getMaxRequestsPerCrawl } from './config';
 const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '60', 10) * 1000 * 60;
 const TIMEOUT_MESSAGE = `Timeout after ${timeOutDuration} ms`;
 
-const receiptHandles: Map<string, string> = new Map();
-const queue = new Queue();
-
 const timeout = async (promise: Promise<void>, time: number) => {
     let timer: NodeJS.Timeout;
     try {
@@ -21,30 +18,16 @@ const timeout = async (promise: Promise<void>, time: number) => {
     }
 };
 
-export async function deleteFromQueue(url: string) {
-    const receiptHandle = receiptHandles.get(url);
-    if (!receiptHandle) {
-        logger.warn(`No receipt handle found for URL: ${url}. Cannot delete from queue.`);
-        return;
-    }
-
-    try {
-        await queue.deleteMessage(receiptHandle);
-        logger.info(`Deleted URL from queue: ${url}`);
-    } catch (err) {
-        logger.error(
-            `Error deleting URL ${url} from queue: ${err instanceof Error ? err.stack || err.message : String(err)}`,
-        );
-    }
-}
-
 async function main() {
-    logger.debug(`Initializing crawler...`);
+    logger.info(`Initializing crawler...`);
     const crawler = new Crawler();
+
+    logger.info(`Inisitalizing queue...`);
+    Queue.init();
 
     let totalRequestsQueued = 0;
     while (true) {
-        const messages = await queue.getMessages();
+        const messages = await Queue.getMessages();
         if (messages.length === 0) {
             logger.info('No messages left in queue... Exiting.');
             break;
@@ -54,7 +37,6 @@ async function main() {
             logger.debug(`Adding URL from queue: ${message.url}`);
             try {
                 await crawler.add(message.url);
-                receiptHandles.set(message.url, message.receiptHandle);
                 totalRequestsQueued += 1;
             } catch (err) {
                 logger.error(

@@ -8,10 +8,11 @@ export type Message = {
 };
 
 export class Queue {
-    private client: SQSClient;
-    private readonly sqsUrl: string;
+    private static receiptHandles: Map<string, string> = new Map();
+    private static client: SQSClient;
+    private static sqsUrl: string = '';
 
-    constructor() {
+    public static init() {
         const sqsUrl = process.env.SQS_QUEUE_URL;
         if (!sqsUrl) {
             throw new Error('SQS_QUEUE_URL environment variable is not set');
@@ -21,7 +22,7 @@ export class Queue {
         this.client = new SQSClient({ region: process.env.AWS_REGION ?? 'eu-west-1' });
     }
 
-    async getMessages(): Promise<Message[]> {
+    public static async getMessages(): Promise<Message[]> {
         logger.debug('Getting messages from SQS queue');
 
         const desired = Math.ceil(getMaxRequestsPerCrawl() / 10);
@@ -44,6 +45,7 @@ export class Queue {
                     url: message.Body,
                     receiptHandle: message.ReceiptHandle,
                 });
+                Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
             }
         }
 
@@ -51,7 +53,14 @@ export class Queue {
         return result;
     }
 
-    async deleteMessage(receiptHandle: string): Promise<void> {
+    public static async deleteMessage(url: string): Promise<void> {
+        logger.debug(`Deleting ${url} from SQS queue`);
+
+        const receiptHandle = this.receiptHandles.get(url);
+        if (!receiptHandle) {
+            logger.warn(`Receipt Handle ${url} not found.`);
+            return;
+        }
         logger.debug(`Deleting message with receipt handle: ${receiptHandle}`);
         await this.client.send(
             new DeleteMessageCommand({
