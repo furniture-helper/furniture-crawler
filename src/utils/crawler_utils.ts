@@ -2,6 +2,45 @@ import { Page } from 'playwright';
 import logger from '../Logger';
 import { getDomainFromUrl } from './url_utils';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
+import { PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
+import { deleteFromQueue } from '../index';
+
+export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
+    if (isBlacklistedUrl(request.url)) {
+        logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
+        request.noRetry = true;
+        request.userData = { ...(request.userData || {}), isDownload: true };
+        request.skipNavigation = true;
+
+        // Remove from database
+        await DatabaseUpsertQueue.removeFromDatabase(request.url);
+        await deleteFromQueue(request.url);
+    }
+}
+
+export async function blockAds({ blockRequests }: PlaywrightCrawlingContext): Promise<void> {
+    await blockRequests({
+        extraUrlPatterns: ['googletagservices.com', 'doubleclick.net', 'adsbygoogle.js', 'facebook.net'],
+    });
+}
+
+export async function blockIframes({ page }: PlaywrightCrawlingContext): Promise<void> {
+    await page.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (type === 'sub_frame') {
+            return route.abort(); // Blocks all iframes
+        }
+        return route.continue();
+    });
+}
+
+export async function blockUnnecessaryResources({ page }: PlaywrightCrawlingContext): Promise<void> {
+    await playwrightUtils.blockRequests(page);
+}
+
+export async function waitForDomContentLoaded({ page }: PlaywrightCrawlingContext): Promise<void> {
+    await page.waitForLoadState('domcontentloaded');
+}
 
 export function isBlacklistedUrl(url: string): boolean {
     const doesUrlContainQueryParam = url.includes('?') || url.includes('&');
@@ -87,4 +126,13 @@ export async function addNewUrls(sourceUrl: string, page: Page) {
             logger.error(err, `Error checking/inserting URL: ${url}`);
         });
     }
+}
+
+export async function isUselessPage(url: string, page: Page): Promise<boolean> {
+    const pageText = (await page.textContent('body')) || '';
+    if (pageText.trim().length < 50) {
+        logger.info(`Page at ${url} deemed useless due to insufficient text content.`);
+        return true;
+    }
+    return false;
 }

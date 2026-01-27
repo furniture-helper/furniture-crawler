@@ -21,7 +21,7 @@ const timeout = async (promise: Promise<void>, time: number) => {
     }
 };
 
-const deleteFromQueueFn = async (url: string) => {
+export async function deleteFromQueue(url: string) {
     const receiptHandle = receiptHandles.get(url);
     if (!receiptHandle) {
         logger.warn(`No receipt handle found for URL: ${url}. Cannot delete from queue.`);
@@ -36,11 +36,11 @@ const deleteFromQueueFn = async (url: string) => {
             `Error deleting URL ${url} from queue: ${err instanceof Error ? err.stack || err.message : String(err)}`,
         );
     }
-};
+}
 
 async function main() {
     logger.debug(`Initializing crawler...`);
-    const crawler = new Crawler(deleteFromQueueFn);
+    const crawler = new Crawler();
 
     let totalRequestsQueued = 0;
     while (true) {

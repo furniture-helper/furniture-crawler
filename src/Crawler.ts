@@ -1,4 +1,4 @@
-import { Configuration, PlaywrightCrawler, PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
+import { Configuration, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -9,8 +9,16 @@ import {
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
-import { Page } from 'playwright';
-import { addNewUrls, isBlacklistedUrl } from './utils/crawler_utils';
+import {
+    addNewUrls,
+    blockAds,
+    blockIframes,
+    blockUnnecessaryResources,
+    checkForBlackListedUrl,
+    isUselessPage,
+    waitForDomContentLoaded,
+} from './utils/crawler_utils';
+import { deleteFromQueue } from './index';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -33,34 +41,22 @@ export default class Crawler {
         navigationTimeoutSecs: 30,
     };
 
-    private readonly completedCallbackFn: (url: string) => Promise<void>;
     private readonly pageStorageConstructor = getPageStorageConstructor();
 
-    constructor(completedCallback: (url: string) => Promise<void>) {
-        this.completedCallbackFn = completedCallback;
-
+    constructor() {
         this.crawler = new PlaywrightCrawler({
             ...this.settings,
             preNavigationHooks: [
-                this.checkForBlackListedUrl.bind(this),
-                this.waitForDomContentLoaded.bind(this),
-                this.blockAds.bind(this),
-                this.blockIframes.bind(this),
-                this.blockUnncessaryResources.bind(this),
+                checkForBlackListedUrl.bind(this),
+                waitForDomContentLoaded.bind(this),
+                blockAds.bind(this),
+                blockIframes.bind(this),
+                blockUnnecessaryResources.bind(this),
             ],
 
             requestHandler: this.requestHandler.bind(this),
             failedRequestHandler: this.failedRequestHandler.bind(this),
         });
-    }
-
-    private static async isUselessPage(url: string, page: Page): Promise<boolean> {
-        const pageText = (await page.textContent('body')) || '';
-        if (pageText.trim().length < 50) {
-            logger.info(`Page at ${url} deemed useless due to insufficient text content.`);
-            return true;
-        }
-        return false;
     }
 
     public async run() {
@@ -75,52 +71,17 @@ export default class Crawler {
         this.crawler.stop(reason);
     }
 
-    private async checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
-        if (isBlacklistedUrl(request.url)) {
-            logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
-            request.noRetry = true;
-            request.userData = { ...(request.userData || {}), isDownload: true };
-            request.skipNavigation = true;
-
-            // Remove from database
-            await DatabaseUpsertQueue.removeFromDatabase(request.url);
-            await this.completedCallbackFn(request.url);
-        }
-    }
-
-    private async blockAds({ blockRequests }: PlaywrightCrawlingContext): Promise<void> {
-        await blockRequests({
-            extraUrlPatterns: ['googletagservices.com', 'doubleclick.net', 'adsbygoogle.js', 'facebook.net'],
-        });
-    }
-
-    private async blockIframes({ page }: PlaywrightCrawlingContext): Promise<void> {
-        await page.route('**/*', (route) => {
-            const type = route.request().resourceType();
-            if (type === 'sub_frame') {
-                return route.abort(); // Blocks all iframes
-            }
-            return route.continue();
-        });
-    }
-
-    private async blockUnncessaryResources({ page }: PlaywrightCrawlingContext): Promise<void> {
-        await playwrightUtils.blockRequests(page);
-    }
-
-    private async waitForDomContentLoaded({ page }: PlaywrightCrawlingContext): Promise<void> {
-        await page.waitForLoadState('domcontentloaded');
-    }
-
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
+            await DatabaseUpsertQueue.removeFromDatabase(request.url);
+            await deleteFromQueue(request.url);
             return;
         }
 
         if (!request.loadedUrl) {
             logger.error(`No loaded URL for request: ${request.url}`);
             await DatabaseUpsertQueue.removeFromDatabase(request.url);
-            await this.completedCallbackFn(request.url);
+            await deleteFromQueue(request.url);
             return;
         }
 
@@ -138,10 +99,10 @@ export default class Crawler {
         logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
         // Check if the page is considered "useless" and should not be crawled
-        if (await Crawler.isUselessPage(request.loadedUrl, page)) {
+        if (await isUselessPage(request.loadedUrl, page)) {
             logger.info(`Skipping useless page: ${request.loadedUrl}`);
             await DatabaseUpsertQueue.removeFromDatabase(request.loadedUrl);
-            await this.completedCallbackFn(request.url);
+            await deleteFromQueue(request.url);
             return;
         }
 
@@ -182,7 +143,7 @@ export default class Crawler {
         const storage = new this.pageStorageConstructor(request.loadedUrl, page);
         await storage.store();
 
-        await this.completedCallbackFn(request.url);
+        await deleteFromQueue(request.url);
         logger.info(`Completed processing for page: ${request.loadedUrl}`);
 
         await addNewUrls(request.loadedUrl, page).catch((err) => {
@@ -193,6 +154,6 @@ export default class Crawler {
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
         logger.error(error, `Request failed for ${request.url}`);
         await DatabaseUpsertQueue.removeFromDatabase(request.url);
-        await this.completedCallbackFn(request.url);
+        await deleteFromQueue(request.url);
     }
 }
