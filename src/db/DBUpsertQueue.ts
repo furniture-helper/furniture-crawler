@@ -45,7 +45,7 @@ export default class DatabaseUpsertQueue {
         DatabaseUpsertQueue.checkedUrls.add(url);
 
         if (isBlacklistedUrl(url)) {
-            logger.info(`URL ${url} is blacklisted. Skipping insertion.`);
+            logger.debug(`URL ${url} is blacklisted. Skipping insertion.`);
             return;
         }
 
