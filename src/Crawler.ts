@@ -88,7 +88,7 @@ export default class Crawler {
 
         const startTime = Date.now();
 
-        logger.info(`Parsing page: ${request.loadedUrl}`);
+        logger.debug(`Parsing page: ${request.loadedUrl}`);
 
         // Abort loading of unnecessary resources to speed up page load
         await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
@@ -100,11 +100,11 @@ export default class Crawler {
             logger.warn(`Network idle timeout for ${request.loadedUrl}`);
         });
 
-        logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
+        logger.debug(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
 
         // Check if the page is considered "useless" and should not be crawled
         if (await isUselessPage(request.loadedUrl, page)) {
-            logger.info(`Skipping useless page: ${request.loadedUrl}`);
+            logger.debug(`Skipping useless page: ${request.loadedUrl}`);
             await this.removeFromDatabaseAndQueue(request.url);
             return;
         }
@@ -126,7 +126,7 @@ export default class Crawler {
         await storage.store();
 
         await Queue.deleteMessage(request.url);
-        logger.info(`Completed processing for page: ${request.loadedUrl}`);
+        logger.debug(`Completed processing for page: ${request.loadedUrl}`);
 
         await addNewUrls(request.loadedUrl, page).catch((err) => {
             logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);

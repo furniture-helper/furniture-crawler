@@ -8,7 +8,7 @@ import { ALLOWED_DOMAINS } from '../allowed_domains';
 
 export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
     if (isBlacklistedUrl(request.url)) {
-        logger.info(`Blacklisted URL detected, skipping: ${request.url}`);
+        logger.debug(`Blacklisted URL detected, skipping: ${request.url}`);
         request.noRetry = true;
         request.userData = { ...(request.userData || {}), isDownload: true };
         request.skipNavigation = true;
@@ -119,7 +119,7 @@ export async function addNewUrls(sourceUrl: string, page: Page) {
             ),
         currentHost,
     );
-    logger.info(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
+    logger.debug(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
 
     for (let url of sameDomainUrls) {
         DatabaseUpsertQueue.checkAndInsertNewUrl(url).catch((err) => {
@@ -131,7 +131,7 @@ export async function addNewUrls(sourceUrl: string, page: Page) {
 export async function isUselessPage(url: string, page: Page): Promise<boolean> {
     const pageText = (await page.textContent('body')) || '';
     if (pageText.trim().length < 50) {
-        logger.info(`Page at ${url} deemed useless due to insufficient text content.`);
+        logger.debug(`Page at ${url} deemed useless due to insufficient text content.`);
         return true;
     }
     return false;
