@@ -19,6 +19,19 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
     }
 }
 
+export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
+    const response = await page.goto(request.url, { waitUntil: 'domcontentloaded' });
+    if (response) {
+        const finalUrl = page.url();
+        if (finalUrl !== request.url) {
+            logger.debug(`Redirect detected from ${request.url} to ${finalUrl}`);
+            await DatabaseUpsertQueue.setInactive(request.url);
+            await Queue.deleteMessage(request.url);
+            request.url = finalUrl;
+        }
+    }
+}
+
 export async function blockAds({ blockRequests }: PlaywrightCrawlingContext): Promise<void> {
     await blockRequests({
         extraUrlPatterns: ['googletagservices.com', 'doubleclick.net', 'adsbygoogle.js', 'facebook.net'],
