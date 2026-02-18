@@ -22,7 +22,6 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
 export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
     const originalUrl = request.url;
     const finalUrl = page.url();
-    logger.debug(`Checking for redirect. Original URL: ${originalUrl}, Loaded URL: ${finalUrl}`);
 
     if (finalUrl !== originalUrl) {
         logger.debug(`Redirect detected from ${originalUrl} to ${finalUrl}`);
