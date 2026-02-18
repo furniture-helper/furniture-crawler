@@ -52,8 +52,10 @@ export default class DatabaseUpsertQueue {
         const domain = getDomainFromUrl(url);
         const query = `
             INSERT INTO pages (url, domain, s3_key, updated_at, is_active)
-            VALUES ($1, $2, 'NOT_CRAWLED', to_timestamp(0), true) ON CONFLICT (url) DO NOTHING
-            RETURNING url;
+            VALUES ($1, $2, 'NOT_CRAWLED', to_timestamp(0), true) ON CONFLICT (url) DO
+            UPDATE
+                SET is_active = true
+                RETURNING url;
         `;
         const values = [url, domain];
 
