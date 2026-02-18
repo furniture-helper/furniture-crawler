@@ -20,25 +20,21 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
 }
 
 export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
-    const response = await page.goto(request.url, { waitUntil: 'domcontentloaded' });
-    if (response) {
-        const finalUrl = page.url();
-        if (finalUrl !== request.url) {
-            logger.debug(`Redirect detected from ${request.url} to ${finalUrl}`);
-            await DatabaseUpsertQueue.setInactive(request.url);
-            await Queue.deleteMessage(request.url);
+    const originalUrl = request.url;
+    const finalUrl = page.url();
+    logger.debug(`Checking for redirect. Original URL: ${originalUrl}, Loaded URL: ${finalUrl}`);
 
-            const redirectDomain = getDomainFromUrl(finalUrl);
-            const isAllowedDomain = redirectDomain ? ALLOWED_DOMAINS.includes(redirectDomain) : false;
-            const isRedirectBlacklisted = isBlacklistedUrl(finalUrl);
+    if (finalUrl !== originalUrl) {
+        logger.debug(`Redirect detected from ${originalUrl} to ${finalUrl}`);
+        await DatabaseUpsertQueue.setInactive(originalUrl);
+        await Queue.deleteMessage(originalUrl);
+        request.url = finalUrl;
 
-            if (!isAllowedDomain || isRedirectBlacklisted) {
-                logger.debug(`Redirect target is not allowed or is blacklisted, skipping navigation to: ${finalUrl}`);
-                request.skipNavigation = true;
-                request.noRetry = true;
-                return;
-            }
-            request.url = finalUrl;
+        if (isBlacklistedUrl(finalUrl)) {
+            logger.debug(`Blacklisted URL detected, skipping: ${finalUrl}`);
+            request.noRetry = true;
+            request.userData = { ...(request.userData || {}), isDownload: true };
+            request.skipNavigation = true;
         }
     }
 }
