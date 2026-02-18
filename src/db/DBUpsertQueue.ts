@@ -55,15 +55,15 @@ export default class DatabaseUpsertQueue {
             VALUES ($1, $2, 'NOT_CRAWLED', to_timestamp(0), true) ON CONFLICT (url) DO
             UPDATE
                 SET is_active = true
-                RETURNING url;
+                RETURNING url, (xmax = 0) AS inserted;
         `;
         const values = [url, domain];
 
         const dbClient = await getPgClient();
         try {
             const res = await dbClient.query(query, values);
-            const inserted = (res.rowCount ?? 0) > 0;
-            if (inserted) {
+            const wasInserted = res.rows[0]?.inserted === true;
+            if (wasInserted) {
                 logger.info(`Inserted new URL ${url} into database.`);
             }
         } catch (err) {
