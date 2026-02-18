@@ -52,8 +52,8 @@ export default class Crawler {
             ...this.settings,
             preNavigationHooks: [
                 checkForBlackListedUrl.bind(this),
-                checkForRedirect.bind(this),
                 waitForDomContentLoaded.bind(this),
+                checkForRedirect.bind(this),
                 blockAds.bind(this),
                 blockIframes.bind(this),
                 blockUnnecessaryResources.bind(this),
