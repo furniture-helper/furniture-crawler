@@ -87,10 +87,10 @@ export default class DatabaseUpsertQueue {
         const dbClient = await getPgClient();
         try {
             await dbClient.query(query, values);
-            logger.info(`Removed URL ${url} from database.`);
+            logger.info(`Set URL ${url} as inactive in database.`);
         } catch (err) {
             this.checkedUrls.delete(url);
-            logger.error(err, `Error removing URL ${url} from database.`);
+            logger.error(err, `Error setting URL ${url} as inactive database.`);
             throw err;
         } finally {
             dbClient.release();
