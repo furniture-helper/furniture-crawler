@@ -14,7 +14,7 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
         request.skipNavigation = true;
 
         // Remove from database
-        await DatabaseUpsertQueue.removeFromDatabase(request.url);
+        await DatabaseUpsertQueue.deleteFromDatabase(request.url);
         await Queue.deleteMessage(request.url);
     }
 }

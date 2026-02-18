@@ -76,13 +76,13 @@ export default class Crawler {
 
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
-            await this.removeFromDatabaseAndQueue(request.url);
+            await this.removeFromQueueAndSetInactive(request.url);
             return;
         }
 
         if (!request.loadedUrl) {
             logger.error(`No loaded URL for request: ${request.url}`);
-            await this.removeFromDatabaseAndQueue(request.url);
+            await this.removeFromQueueAndSetInactive(request.url);
             return;
         }
 
@@ -105,7 +105,7 @@ export default class Crawler {
         // Check if the page is considered "useless" and should not be crawled
         if (await isUselessPage(request.loadedUrl, page)) {
             logger.debug(`Skipping useless page: ${request.loadedUrl}`);
-            await this.removeFromDatabaseAndQueue(request.url);
+            await this.removeFromQueueAndSetInactive(request.url);
             return;
         }
 
@@ -135,11 +135,11 @@ export default class Crawler {
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
         logger.error(error, `Request failed for ${request.url}`);
-        await this.removeFromDatabaseAndQueue(request.url);
+        // await this.removeFromQueueAndSetInactive(request.url);
     }
 
-    private async removeFromDatabaseAndQueue(url: string): Promise<void> {
-        await DatabaseUpsertQueue.removeFromDatabase(url);
+    private async removeFromQueueAndSetInactive(url: string): Promise<void> {
+        await DatabaseUpsertQueue.setInactive(url);
         await Queue.deleteMessage(url);
     }
 }

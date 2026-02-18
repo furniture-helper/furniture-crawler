@@ -52,8 +52,10 @@ export default class DatabaseUpsertQueue {
         const domain = getDomainFromUrl(url);
         const query = `
             INSERT INTO pages (url, domain, s3_key, updated_at, is_active)
-            VALUES ($1, $2, 'NOT_CRAWLED', to_timestamp(0), true) ON CONFLICT (url) DO NOTHING
-            RETURNING url;
+            VALUES ($1, $2, 'NOT_CRAWLED', to_timestamp(0), true) ON CONFLICT (url) DO
+            UPDATE
+                SET is_active = true
+                RETURNING url;
         `;
         const values = [url, domain];
 
@@ -73,7 +75,7 @@ export default class DatabaseUpsertQueue {
         }
     }
 
-    public static async removeFromDatabase(url: string): Promise<void> {
+    public static async setInactive(url: string): Promise<void> {
         this.checkedUrls.add(url);
         const query = `
             UPDATE pages
@@ -85,10 +87,32 @@ export default class DatabaseUpsertQueue {
         const dbClient = await getPgClient();
         try {
             await dbClient.query(query, values);
-            logger.info(`Removed URL ${url} from database.`);
+            logger.info(`Set URL ${url} as inactive in database.`);
         } catch (err) {
             this.checkedUrls.delete(url);
-            logger.error(err, `Error removing URL ${url} from database.`);
+            logger.error(err, `Error setting URL ${url} as inactive database.`);
+            throw err;
+        } finally {
+            dbClient.release();
+        }
+    }
+
+    public static async deleteFromDatabase(url: string): Promise<void> {
+        this.checkedUrls.add(url);
+        const query = `
+            DELETE
+            FROM pages
+            WHERE url = $1;
+        `;
+        const values = [url];
+
+        const dbClient = await getPgClient();
+        try {
+            await dbClient.query(query, values);
+            logger.info(`Deleted URL ${url} from database.`);
+        } catch (err) {
+            this.checkedUrls.delete(url);
+            logger.error(err, `Error deleting URL ${url} from database.`);
             throw err;
         } finally {
             dbClient.release();
