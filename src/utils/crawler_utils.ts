@@ -27,6 +27,17 @@ export async function checkForRedirect({ page, request }: PlaywrightCrawlingCont
             logger.debug(`Redirect detected from ${request.url} to ${finalUrl}`);
             await DatabaseUpsertQueue.setInactive(request.url);
             await Queue.deleteMessage(request.url);
+
+            const redirectDomain = getDomainFromUrl(finalUrl);
+            const isAllowedDomain = redirectDomain ? ALLOWED_DOMAINS.includes(redirectDomain) : false;
+            const isRedirectBlacklisted = isBlacklistedUrl(finalUrl);
+
+            if (!isAllowedDomain || isRedirectBlacklisted) {
+                logger.debug(`Redirect target is not allowed or is blacklisted, skipping navigation to: ${finalUrl}`);
+                request.skipNavigation = true;
+                request.noRetry = true;
+                return;
+            }
             request.url = finalUrl;
         }
     }
