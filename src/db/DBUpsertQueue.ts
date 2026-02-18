@@ -12,13 +12,14 @@ export default class DatabaseUpsertQueue {
         logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
 
         const query = `
-            INSERT INTO pages (url, domain, s3_key, is_active)
-            VALUES ($1, $2, $3, true) ON CONFLICT (url) DO
+            INSERT INTO pages (url, domain, s3_key, is_active, last_crawled_at)
+            VALUES ($1, $2, $3, true, $4) ON CONFLICT (url) DO
             UPDATE SET domain = EXCLUDED.domain,
                 s3_key = EXCLUDED.s3_key,
-                is_active = true;
+                is_active = true,
+                last_crawled_at = $4
         `;
-        const values = [url, domain, s3Key];
+        const values = [url, domain, s3Key, new Date()];
 
         logger.debug(`Attempting to get db connection for URL: ${url}`);
         const dbClient = await getPgClient();
