@@ -55,7 +55,6 @@ export async function checkForRedirect({ page, request }: PlaywrightCrawlingCont
             logger.debug(`Blacklisted URL detected, skipping: ${finalUrl}`);
             request.noRetry = true;
             request.userData = { ...(request.userData || {}), isDownload: true };
-            request.skipNavigation = true;
         }
     }
 }
