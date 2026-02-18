@@ -53,6 +53,8 @@ export async function checkForRedirect({ page, request }: PlaywrightCrawlingCont
 
         if (isBlacklistedUrl(finalUrl)) {
             logger.debug(`Blacklisted URL detected, skipping: ${finalUrl}`);
+            await DatabaseUpsertQueue.deleteFromDatabase(finalUrl);
+            await Queue.deleteMessage(finalUrl);
             request.noRetry = true;
             request.userData = { ...(request.userData || {}), isDownload: true };
         }
