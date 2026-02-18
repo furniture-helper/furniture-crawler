@@ -71,6 +71,7 @@ export function isBlacklistedUrl(url: string): boolean {
     const wooComparePattern = /(?=.*[?&]action=yith-woocompare-add-product(?:&|$))(?=.*[?&]id=(?<id>\d+)(?:&|$)).*/i;
     const addToWishlistQueryPattern = /(?:[?&]|^)add_to_wishlist=(\d+)(?:&|$)/i;
     const productTagPattern = /\/product-tag\/[^\/?#]+\/?/i;
+    const checkoutsPattern = /\/checkouts(?:\/|$)/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -87,6 +88,7 @@ export function isBlacklistedUrl(url: string): boolean {
         wooComparePattern,
         addToWishlistQueryPattern,
         productTagPattern,
+        checkoutsPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
