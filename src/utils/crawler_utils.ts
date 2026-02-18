@@ -48,6 +48,8 @@ export async function checkForRedirect({ page, request }: PlaywrightCrawlingCont
         await DatabaseUpsertQueue.setInactive(originalUrl);
         await Queue.deleteMessage(originalUrl);
         request.url = finalUrl;
+        // Ensure the rest of the crawler logic sees the correct redirected URL
+        (request as any).loadedUrl = finalUrl;
 
         if (isBlacklistedUrl(finalUrl)) {
             logger.debug(`Blacklisted URL detected, skipping: ${finalUrl}`);
