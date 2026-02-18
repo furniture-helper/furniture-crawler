@@ -19,11 +19,31 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
     }
 }
 
+function normalizeUrlForComparison(url: string): string {
+    try {
+        const parsed = new URL(url);
+        // Remove trailing slashes from the pathname, but keep root as "/"
+        let pathname = parsed.pathname.replace(/\/+$/, '');
+        if (pathname === '') {
+            pathname = '/';
+        }
+        parsed.pathname = pathname;
+        // Build a canonical string without fragment (hash is ignored by Playwright page.url())
+        return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
+    } catch {
+        // Fallback: simple trailing slash normalization
+        return url.replace(/\/+$/, '');
+    }
+}
+
 export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
     const originalUrl = request.url;
     const finalUrl = page.url();
 
-    if (finalUrl !== originalUrl) {
+    const normalizedOriginalUrl = normalizeUrlForComparison(originalUrl);
+    const normalizedFinalUrl = normalizeUrlForComparison(finalUrl);
+
+    if (normalizedFinalUrl !== normalizedOriginalUrl) {
         logger.debug(`Redirect detected from ${originalUrl} to ${finalUrl}`);
         await DatabaseUpsertQueue.setInactive(originalUrl);
         await Queue.deleteMessage(originalUrl);
