@@ -17,6 +17,7 @@ import {
     blockIframes,
     blockUnnecessaryResources,
     checkForBlackListedUrl,
+    checkForRedirect,
     isUselessPage,
     resolveToAbsoluteUrls,
     waitForDomContentLoaded,
@@ -56,6 +57,7 @@ export default class Crawler {
                 blockIframes.bind(this),
                 blockUnnecessaryResources.bind(this),
             ],
+            postNavigationHooks: [checkForRedirect.bind(this)],
 
             requestHandler: this.requestHandler.bind(this),
             failedRequestHandler: this.failedRequestHandler.bind(this),

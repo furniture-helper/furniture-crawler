@@ -19,6 +19,48 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
     }
 }
 
+function normalizeUrlForComparison(url: string): string {
+    try {
+        const parsed = new URL(url);
+        // Remove trailing slashes from the pathname, but keep root as "/"
+        let pathname = parsed.pathname.replace(/\/+$/, '');
+        if (pathname === '') {
+            pathname = '/';
+        }
+        parsed.pathname = pathname;
+        // Build a canonical string without fragment (hash is ignored by Playwright page.url())
+        return `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
+    } catch {
+        // Fallback: simple trailing slash normalization
+        return url.replace(/\/+$/, '');
+    }
+}
+
+export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
+    const originalUrl = request.url;
+    const finalUrl = page.url();
+
+    const normalizedOriginalUrl = normalizeUrlForComparison(originalUrl);
+    const normalizedFinalUrl = normalizeUrlForComparison(finalUrl);
+
+    if (normalizedFinalUrl !== normalizedOriginalUrl) {
+        logger.debug(`Redirect detected from ${originalUrl} to ${finalUrl}`);
+        await DatabaseUpsertQueue.setInactive(originalUrl);
+        await Queue.deleteMessage(originalUrl);
+        request.url = finalUrl;
+        // Ensure the rest of the crawler logic sees the correct redirected URL
+        (request as any).loadedUrl = finalUrl;
+
+        if (isBlacklistedUrl(finalUrl)) {
+            logger.debug(`Blacklisted URL detected, skipping: ${finalUrl}`);
+            await DatabaseUpsertQueue.deleteFromDatabase(finalUrl);
+            await Queue.deleteMessage(finalUrl);
+            request.noRetry = true;
+            request.userData = { ...(request.userData || {}), isDownload: true };
+        }
+    }
+}
+
 export async function blockAds({ blockRequests }: PlaywrightCrawlingContext): Promise<void> {
     await blockRequests({
         extraUrlPatterns: ['googletagservices.com', 'doubleclick.net', 'adsbygoogle.js', 'facebook.net'],
