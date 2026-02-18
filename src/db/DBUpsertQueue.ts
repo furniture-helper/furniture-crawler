@@ -75,7 +75,7 @@ export default class DatabaseUpsertQueue {
         }
     }
 
-    public static async removeFromDatabase(url: string): Promise<void> {
+    public static async setInactive(url: string): Promise<void> {
         this.checkedUrls.add(url);
         const query = `
             UPDATE pages
@@ -91,6 +91,28 @@ export default class DatabaseUpsertQueue {
         } catch (err) {
             this.checkedUrls.delete(url);
             logger.error(err, `Error removing URL ${url} from database.`);
+            throw err;
+        } finally {
+            dbClient.release();
+        }
+    }
+
+    public static async deleteFromDatabase(url: string): Promise<void> {
+        this.checkedUrls.add(url);
+        const query = `
+            DELETE
+            FROM pages
+            WHERE url = $1;
+        `;
+        const values = [url];
+
+        const dbClient = await getPgClient();
+        try {
+            await dbClient.query(query, values);
+            logger.info(`Deleted URL ${url} from database.`);
+        } catch (err) {
+            this.checkedUrls.delete(url);
+            logger.error(err, `Error deleting URL ${url} from database.`);
             throw err;
         } finally {
             dbClient.release();

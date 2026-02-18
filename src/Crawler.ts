@@ -135,11 +135,16 @@ export default class Crawler {
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
         logger.error(error, `Request failed for ${request.url}`);
-        await this.removeFromDatabaseAndQueue(request.url);
+        await this.removeFromQueueAndSetInactive(request.url);
     }
 
     private async removeFromDatabaseAndQueue(url: string): Promise<void> {
-        await DatabaseUpsertQueue.removeFromDatabase(url);
+        await DatabaseUpsertQueue.deleteFromDatabase(url);
+        await Queue.deleteMessage(url);
+    }
+
+    private async removeFromQueueAndSetInactive(url: string): Promise<void> {
+        await DatabaseUpsertQueue.setInactive(url);
         await Queue.deleteMessage(url);
     }
 }
