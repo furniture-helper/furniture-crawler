@@ -5,6 +5,7 @@ import DatabaseUpsertQueue from '../db/DBUpsertQueue';
 import { PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
 import { Queue } from '../CrawlerQueue/Queue';
 import { ALLOWED_DOMAINS } from '../allowed_domains';
+import { transformUrl } from './url_transformers';
 
 export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
     if (isBlacklistedUrl(request.url)) {
@@ -37,6 +38,10 @@ function normalizeUrlForComparison(url: string): string {
 }
 
 export async function checkForRedirect({ page, request }: PlaywrightCrawlingContext): Promise<void> {
+    if (request.skipNavigation) {
+        return;
+    }
+
     const originalUrl = request.url;
     const finalUrl = page.url();
 
@@ -114,6 +119,7 @@ export function isBlacklistedUrl(url: string): boolean {
     const addToWishlistQueryPattern = /(?:[?&]|^)add_to_wishlist=(\d+)(?:&|$)/i;
     const productTagPattern = /\/product-tag\/[^\/?#]+\/?/i;
     const checkoutsPattern = /\/checkouts(?:\/|$)/i;
+    const collectionsProductsPattern = /\/collections\/[^\/]+\/products\//i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -131,6 +137,7 @@ export function isBlacklistedUrl(url: string): boolean {
         addToWishlistQueryPattern,
         productTagPattern,
         checkoutsPattern,
+        collectionsProductsPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
@@ -166,6 +173,7 @@ export async function addNewUrls(sourceUrl: string, page: Page) {
     logger.debug(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
 
     for (let url of sameDomainUrls) {
+        url = transformUrl(url);
         DatabaseUpsertQueue.checkAndInsertNewUrl(url).catch((err) => {
             logger.error(err, `Error checking/inserting URL: ${url}`);
         });
