@@ -120,6 +120,7 @@ export function isBlacklistedUrl(url: string): boolean {
     const productTagPattern = /\/product-tag\/[^\/?#]+\/?/i;
     const checkoutsPattern = /\/checkouts(?:\/|$)/i;
     const collectionsProductsPattern = /\/collections\/[^\/]+\/products\//i;
+    const authPattern = /\/auth\/[^\/\?#]+\/?$/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -138,6 +139,7 @@ export function isBlacklistedUrl(url: string): boolean {
         productTagPattern,
         checkoutsPattern,
         collectionsProductsPattern,
+        authPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
