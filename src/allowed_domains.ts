@@ -12,4 +12,12 @@ export const ALLOWED_DOMAINS = [
     'simplytek.lk',
     'agc.lk',
     'redlinetech.lk',
+    'buyabans.com',
+    'bigdeals.lk',
+    'kapruka.com',
+    'takas.lk',
+    'daraz.lk',
+    'pettahkade.lk',
+    'homelux.lk',
+    'finez.lk',
 ];
