@@ -152,25 +152,33 @@ export function isBlacklistedUrl(url: string): boolean {
 
 export async function addNewUrls(sourceUrl: string, page: Page) {
     const currentHost = new URL(sourceUrl).hostname;
+    const baseUrl = page.url(); // Use actual page URL as base for resolving relative URLs
 
     const sameDomainUrls = await page.$$eval(
         'a[href]',
-        (anchors: HTMLAnchorElement[], host: string) =>
-            Array.from(
-                new Set(
-                    anchors
-                        .map((a) => a.href.split('#')[0]) // remove fragments
-                        .filter(Boolean)
-                        .filter((h) => {
-                            try {
-                                return new URL(h).hostname === host;
-                            } catch {
-                                return false;
-                            }
-                        }),
-                ),
-            ),
-        currentHost,
+        (anchors: HTMLAnchorElement[], { host, base }: { host: string; base: string }) => {
+            const results: string[] = [];
+            for (const a of anchors) {
+                try {
+                    // Get the href attribute value
+                    const hrefAttr = a.getAttribute('href');
+                    if (!hrefAttr) continue;
+
+                    // Resolve relative URLs against the base URL
+                    const absoluteUrl = new URL(hrefAttr, base).href.split('#')[0];
+                    if (!absoluteUrl) continue;
+
+                    const urlHostname = new URL(absoluteUrl).hostname;
+                    if (urlHostname === host) {
+                        results.push(absoluteUrl);
+                    }
+                } catch {
+                    // Invalid URL, skip
+                }
+            }
+            return [...new Set(results)];
+        },
+        { host: currentHost, base: baseUrl },
     );
     logger.debug(`Found ${sameDomainUrls.length} same-domain links on ${sourceUrl}`);
 
