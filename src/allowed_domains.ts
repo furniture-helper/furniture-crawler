@@ -14,7 +14,6 @@ export const ALLOWED_DOMAINS = [
     'redlinetech.lk',
     'buyabans.com',
     'bigdeals.lk',
-    'kapruka.com',
     'takas.lk',
     'daraz.lk',
     'pettahkade.lk',
