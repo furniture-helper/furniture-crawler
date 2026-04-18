@@ -52,7 +52,7 @@ async function main() {
     }
 
     try {
-        // logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
+        logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
         // await crawler.add('https://geniusmobile.lk');
         await timeout(crawler.run(), timeOutDuration);
 
