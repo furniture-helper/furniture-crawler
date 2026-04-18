@@ -121,6 +121,7 @@ export function isBlacklistedUrl(url: string): boolean {
     const checkoutsPattern = /\/checkouts(?:\/|$)/i;
     const collectionsProductsPattern = /\/collections\/[^\/]+\/products\//i;
     const authPattern = /\/auth\/[^\/\?#]+\/?$/i;
+    const fireworksUgandaPattern = /^https?:\/\/fireworks\.lk\/.*uganda/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -140,6 +141,7 @@ export function isBlacklistedUrl(url: string): boolean {
         checkoutsPattern,
         collectionsProductsPattern,
         authPattern,
+        fireworksUgandaPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
