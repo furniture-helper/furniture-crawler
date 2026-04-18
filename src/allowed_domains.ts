@@ -18,4 +18,6 @@ export const ALLOWED_DOMAINS = [
     'pettahkade.lk',
     'homelux.lk',
     'finez.lk',
+    'dialcom.lk',
+    'geniusmobile.lk',
 ];

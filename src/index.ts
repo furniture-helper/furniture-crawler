@@ -1,7 +1,7 @@
 import Crawler from './Crawler';
 import logger from './Logger';
-import { Queue } from './CrawlerQueue/Queue';
 import { getMaxRequestsPerCrawl } from './config';
+import { Queue } from './CrawlerQueue/Queue';
 
 const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '60', 10) * 1000 * 60;
 const TIMEOUT_MESSAGE = `Timeout after ${timeOutDuration} ms`;
@@ -49,13 +49,11 @@ async function main() {
             logger.info(`Reached max requests per crawl: ${getMaxRequestsPerCrawl()}`);
             break;
         }
-
-        // Wait 5s
-        await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     try {
         logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
+        // await crawler.add('https://geniusmobile.lk');
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);
