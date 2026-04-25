@@ -20,4 +20,6 @@ export const ALLOWED_DOMAINS = [
     'finez.lk',
     'dialcom.lk',
     'geniusmobile.lk',
+    'celltronics.lk',
+    'mansafit.com',
 ];
