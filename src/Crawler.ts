@@ -49,7 +49,7 @@ export default class Crawler {
     };
 
     private readonly pageStorageConstructor = getPageStorageConstructor();
-    private readonly ignoredDomains: string[] = [];
+    private readonly backoffDomains: Map<string, Date> = new Map();
 
     private readonly crawlerLog = new Log({
         level: log.LEVELS.INFO,
@@ -174,17 +174,15 @@ export default class Crawler {
             return;
         }
 
+        logger.error(error, `Request failed for ${request.url}`);
+
         if (
             error instanceof Error &&
             (error.message.includes('received 429 status code') || error.message.includes('received 403 status code'))
         ) {
             const domain = getDomainFromUrl(request.url);
-            if (!this.ignoredDomains.includes(domain)) this.ignoredDomains.push(domain);
-            return;
+            this.backoffDomains.set(domain, new Date());
         }
-
-        logger.error(error, `Request failed for ${request.url}`);
-        // await this.removeFromQueueAndSetInactive(request.url);
     }
 
     private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
@@ -198,10 +196,7 @@ export default class Crawler {
         ) {
             request.noRetry = true;
             const domain = getDomainFromUrl(request.url);
-            if (!this.ignoredDomains.includes(domain)) {
-                logger.info(`Adding domain to ignored list due to 403/429 error: ${domain}`);
-                this.ignoredDomains.push(domain);
-            }
+            this.backoffDomains.set(domain, new Date());
         }
     }
 
@@ -212,11 +207,20 @@ export default class Crawler {
 
     private isInIgnoredDomain({ request }: PlaywrightCrawlingContext) {
         const domain = getDomainFromUrl(request.url);
-        if (this.ignoredDomains.includes(domain)) {
-            logger.info(`Ignoring url ${request.url} due to ignored domain`);
-            request.noRetry = true;
-            request.skipNavigation = true;
-            throw new AbortedRequestError(request.url);
+        if (this.backoffDomains.has(domain)) {
+            const backOffStart = this.backoffDomains.get(domain)!;
+            const backOffDuration = 60 * 1000; // 1 minute backoff
+            const timeSinceBackoff = Date.now() - backOffStart.getTime();
+            if (timeSinceBackoff < backOffDuration) {
+                logger.info(
+                    `Backing off from domain ${domain} for ${Math.ceil((backOffDuration - timeSinceBackoff) / 1000)} seconds`,
+                );
+                request.noRetry = true;
+                request.skipNavigation = true;
+                throw new AbortedRequestError(request.url);
+            } else {
+                this.backoffDomains.delete(domain);
+            }
         }
     }
 }
