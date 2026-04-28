@@ -64,7 +64,12 @@ export default class Crawler {
                 .join(' ');
 
             // Suppress only this control-flow failure noise
-            if (text.includes('AbortedRequestError') || text.includes('Aborted request for ')) {
+            if (
+                text.includes('AbortedRequestError') ||
+                text.includes('Aborted request for ') ||
+                text.includes('received 403 status code') ||
+                text.includes('received 429 status code')
+            ) {
                 return;
             }
 
@@ -166,6 +171,15 @@ export default class Crawler {
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
         if (error instanceof AbortedRequestError) {
+            return;
+        }
+
+        if (
+            error instanceof Error &&
+            (error.message.includes('received 429 status code') || error.message.includes('received 403 status code'))
+        ) {
+            const domain = getDomainFromUrl(request.url);
+            if (!this.ignoredDomains.includes(domain)) this.ignoredDomains.push(domain);
             return;
         }
 
