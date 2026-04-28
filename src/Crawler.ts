@@ -195,7 +195,7 @@ export default class Crawler {
 
     private isInIgnoredDomain({ request }: PlaywrightCrawlingContext) {
         const domain = getDomainFromUrl(request.url);
-        if (this.ignoredDomains.includes(domain) || true) {
+        if (this.ignoredDomains.includes(domain)) {
             logger.debug(`Ignoring url ${request.url} due to ignored domain`);
             request.noRetry = true;
             request.skipNavigation = true;
