@@ -198,7 +198,10 @@ export default class Crawler {
         ) {
             request.noRetry = true;
             const domain = getDomainFromUrl(request.url);
-            if (!this.ignoredDomains.includes(domain)) this.ignoredDomains.push(domain);
+            if (!this.ignoredDomains.includes(domain)) {
+                logger.info(`Adding domain to ignored list due to 403/429 error: ${domain}`);
+                this.ignoredDomains.push(domain);
+            }
         }
     }
 
@@ -210,7 +213,7 @@ export default class Crawler {
     private isInIgnoredDomain({ request }: PlaywrightCrawlingContext) {
         const domain = getDomainFromUrl(request.url);
         if (this.ignoredDomains.includes(domain)) {
-            logger.debug(`Ignoring url ${request.url} due to ignored domain`);
+            logger.info(`Ignoring url ${request.url} due to ignored domain`);
             request.noRetry = true;
             request.skipNavigation = true;
             throw new AbortedRequestError(request.url);
