@@ -1,4 +1,4 @@
-import { Configuration, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
+import { Configuration, log, Log, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -23,6 +23,8 @@ import {
     waitForDomContentLoaded,
 } from './utils/crawler_utils';
 import { Queue } from './CrawlerQueue/Queue';
+import { getDomainFromUrl } from './utils/url_utils';
+import { AbortedRequestError } from './errors';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -43,15 +45,37 @@ export default class Crawler {
         requestHandlerTimeoutSecs: getRequestHandlerTimeoutSecs(),
         persistCookiesPerSession: true,
         navigationTimeoutSecs: getNavigationTimeoutSecs(),
+        maxRequestRetries: 3,
     };
 
     private readonly pageStorageConstructor = getPageStorageConstructor();
+    private readonly ignoredDomains: string[] = [];
+
+    private readonly crawlerLog = new Log({
+        level: log.LEVELS.INFO,
+    });
 
     constructor() {
+        const originalError = this.crawlerLog.error.bind(this.crawlerLog);
+
+        this.crawlerLog.error = (message?: unknown, ...optionalParams: unknown[]) => {
+            const text = [message, ...optionalParams]
+                .map((v) => (typeof v === 'string' ? v : v instanceof Error ? v.message : JSON.stringify(v)))
+                .join(' ');
+
+            // Suppress only this control-flow failure noise
+            if (text.includes('AbortedRequestError') || text.includes('Aborted request for ')) {
+                return;
+            }
+
+            originalError(message as any);
+        };
         this.crawler = new PlaywrightCrawler({
             ...this.settings,
+            log: this.crawlerLog,
             preNavigationHooks: [
                 checkForBlackListedUrl.bind(this),
+                this.isInIgnoredDomain.bind(this),
                 waitForDomContentLoaded.bind(this),
                 blockAds.bind(this),
                 blockIframes.bind(this),
@@ -61,6 +85,7 @@ export default class Crawler {
 
             requestHandler: this.requestHandler.bind(this),
             failedRequestHandler: this.failedRequestHandler.bind(this),
+            errorHandler: this.errorHandler.bind(this),
         });
     }
 
@@ -79,6 +104,10 @@ export default class Crawler {
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
+            return;
+        }
+
+        if (request.skipNavigation) {
             return;
         }
 
@@ -136,12 +165,41 @@ export default class Crawler {
     }
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        if (error instanceof AbortedRequestError) {
+            return;
+        }
+
         logger.error(error, `Request failed for ${request.url}`);
         // await this.removeFromQueueAndSetInactive(request.url);
+    }
+
+    private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        if (error instanceof AbortedRequestError) {
+            return;
+        }
+
+        if (
+            error instanceof Error &&
+            (error.message.includes('received 429 status code') || error.message.includes('received 403 status code'))
+        ) {
+            request.noRetry = true;
+            const domain = getDomainFromUrl(request.url);
+            if (!this.ignoredDomains.includes(domain)) this.ignoredDomains.push(domain);
+        }
     }
 
     private async removeFromQueueAndSetInactive(url: string): Promise<void> {
         await DatabaseUpsertQueue.setInactive(url);
         await Queue.deleteMessage(url);
+    }
+
+    private isInIgnoredDomain({ request }: PlaywrightCrawlingContext) {
+        const domain = getDomainFromUrl(request.url);
+        if (this.ignoredDomains.includes(domain) || true) {
+            logger.debug(`Ignoring url ${request.url} due to ignored domain`);
+            request.noRetry = true;
+            request.skipNavigation = true;
+            throw new AbortedRequestError(request.url);
+        }
     }
 }

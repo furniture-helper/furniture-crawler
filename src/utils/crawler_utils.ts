@@ -6,6 +6,7 @@ import { PlaywrightCrawlingContext, playwrightUtils } from 'crawlee';
 import { Queue } from '../CrawlerQueue/Queue';
 import { ALLOWED_DOMAINS } from '../allowed_domains';
 import { transformUrl } from './url_transformers';
+import { AbortedRequestError } from '../errors';
 
 export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingContext): Promise<void> {
     if (isBlacklistedUrl(request.url)) {
@@ -17,6 +18,8 @@ export async function checkForBlackListedUrl({ request }: PlaywrightCrawlingCont
         // Remove from database
         await DatabaseUpsertQueue.deleteFromDatabase(request.url);
         await Queue.deleteMessage(request.url);
+
+        throw new AbortedRequestError(request.url);
     }
 }
 
@@ -86,7 +89,8 @@ export async function blockUnnecessaryResources({ page }: PlaywrightCrawlingCont
     await playwrightUtils.blockRequests(page);
 }
 
-export async function waitForDomContentLoaded({ page }: PlaywrightCrawlingContext): Promise<void> {
+export async function waitForDomContentLoaded({ request, page }: PlaywrightCrawlingContext): Promise<void> {
+    if (request.skipNavigation) return;
     await page.waitForLoadState('domcontentloaded');
 }
 

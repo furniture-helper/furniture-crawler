@@ -1,6 +1,8 @@
 import { DeleteMessageCommand, ReceiveMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import logger from '../Logger';
 import { getMaxRequestsPerCrawl } from '../config';
+import { isBlacklistedUrl } from '../utils/crawler_utils';
+import DatabaseUpsertQueue from '../db/DBUpsertQueue';
 
 export type Message = {
     url: string;
@@ -41,11 +43,18 @@ export class Queue {
         const result: Message[] = [];
         for (const message of messages.Messages) {
             if (message.Body && message.ReceiptHandle) {
+                Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
+
+                const url = message.Body;
+                if (isBlacklistedUrl(url)) {
+                    await DatabaseUpsertQueue.deleteFromDatabase(url);
+                    await this.deleteMessage(url);
+                    continue;
+                }
                 result.push({
                     url: message.Body,
                     receiptHandle: message.ReceiptHandle,
                 });
-                Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
             }
         }
 
