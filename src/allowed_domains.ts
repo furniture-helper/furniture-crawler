@@ -22,4 +22,6 @@ export const ALLOWED_DOMAINS = [
     'geniusmobile.lk',
     'celltronics.lk',
     'mansafit.com',
+    'luxuryx.lk',
+    'xclusive.lk',
 ];
