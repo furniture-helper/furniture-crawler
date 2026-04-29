@@ -104,9 +104,9 @@ export default class DatabaseUpsertQueue {
 
         const query = `
             INSERT INTO pages (url, domain, s3_key, last_crawled_at)
-            VALUES ($1, $2, 'NOT_CRAWLED', $3) ON CONFLICT (url) DO
+            VALUES ($1, $2, 'REDIRECT', $3) ON CONFLICT (url) DO
             UPDATE SET domain = EXCLUDED.domain,
-                s3_key = 'NOT_CRAWLED',
+                s3_key = 'REDIRECT',
                 last_crawled_at = $3
         `;
         const values = [url, domain, new Date()];
