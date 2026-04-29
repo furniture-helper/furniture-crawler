@@ -103,10 +103,10 @@ export default class DatabaseUpsertQueue {
         logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
 
         const query = `
-            INSERT INTO pages (url, domain, last_crawled_at)
-            VALUES ($1, $2, $3) ON CONFLICT (url) DO
+            INSERT INTO pages (url, domain, s3_key, last_crawled_at)
+            VALUES ($1, $2, 'NOT_CRAWLED', $3) ON CONFLICT (url) DO
             UPDATE SET domain = EXCLUDED.domain,
-                s3_key = EXCLUDED.s3_key,
+                s3_key = 'NOT_CRAWLED',
                 last_crawled_at = $3
         `;
         const values = [url, domain, new Date()];
