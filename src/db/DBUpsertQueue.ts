@@ -98,6 +98,36 @@ export default class DatabaseUpsertQueue {
         }
     }
 
+    public static async markAsCrawled(url: string): Promise<void> {
+        const domain = getDomainFromUrl(url);
+        logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
+
+        const query = `
+            INSERT INTO pages (url, domain, last_crawled_at)
+            VALUES ($1, $2, $3) ON CONFLICT (url) DO
+            UPDATE SET domain = EXCLUDED.domain,
+                s3_key = EXCLUDED.s3_key,
+                last_crawled_at = $3
+        `;
+        const values = [url, domain, new Date()];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing mark as crawled for URL: ${url}`);
+
+        try {
+            logger.debug(`Executing mark as crawled query for URL: ${url}`);
+            await dbClient.query(query, values);
+            logger.info(`Marked as crawled URL ${url} into database.`);
+        } catch (err) {
+            logger.error(err, `Error marking as crawl URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
+
     public static async deleteFromDatabase(url: string): Promise<void> {
         this.checkedUrls.add(url);
         const query = `
