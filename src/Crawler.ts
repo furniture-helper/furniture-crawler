@@ -19,6 +19,7 @@ import {
     checkForBlackListedUrl,
     checkForRedirect,
     isUselessPage,
+    removeCommonElements,
     resolveToAbsoluteUrls,
     waitForDomContentLoaded,
 } from './utils/crawler_utils';
@@ -155,6 +156,8 @@ export default class Crawler {
 
         await resolveToAbsoluteUrls(page);
         logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
+
+        await removeCommonElements(page);
 
         // Store the page using the selected storage mechanism
         logger.debug(`Working on storing page: ${request.loadedUrl}`);

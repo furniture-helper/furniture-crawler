@@ -207,6 +207,28 @@ export async function isUselessPage(url: string, page: Page): Promise<boolean> {
     return false;
 }
 
+export async function removeCommonElements(page: Page): Promise<void> {
+    const knownClasses = ['.wd-products-nav'];
+    await page.evaluate((classes) => {
+        classes.forEach((cls) => {
+            const elements = document.querySelectorAll(cls);
+            elements.forEach((el) => el.remove());
+        });
+    }, knownClasses);
+}
+
+// export async function hideHiddenElements(page: Page): Promise<void> {
+//     await page.evaluate(() => {
+//         const hiddenElements = document.querySelectorAll('body *:not(script):not(noscript)');
+//         hiddenElements.forEach((el) => {
+//             const style = window.getComputedStyle(el);
+//             if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
+//                 el.remove(); // Actually removes from DOM
+//             }
+//         });
+//     });
+// }
+
 export async function resolveToAbsoluteUrls(page: Page): Promise<void> {
     await page.evaluate(() => {
         const resolveToAbsolute = (attrName: string, propName: string) => {
