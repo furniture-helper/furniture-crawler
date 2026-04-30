@@ -15,6 +15,10 @@ async function getSpecialization(url: string, page: Page): Promise<Specializatio
         const { default: AbansSpecialization } = await import('./AbansSpecialization');
         return new AbansSpecialization(page);
     }
+    if (url.includes('celltronics.lk')) {
+        const { default: CelltronicsSpecialization } = await import('./CelltronicsSpecialization');
+        return new CelltronicsSpecialization(page);
+    }
 
     return null;
 }
