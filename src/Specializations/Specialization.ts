@@ -19,6 +19,10 @@ async function getSpecialization(url: string, page: Page): Promise<Specializatio
         const { default: CelltronicsSpecialization } = await import('./CelltronicsSpecialization');
         return new CelltronicsSpecialization(page);
     }
+    if (url.includes('ugreen.lk')) {
+        const { default: UgreenSpecialization } = await import('./UgreenSpecialization');
+        return new UgreenSpecialization(page);
+    }
 
     return null;
 }
