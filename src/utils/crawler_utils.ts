@@ -211,7 +211,7 @@ export async function isUselessPage(url: string, page: Page): Promise<boolean> {
 }
 
 export async function removeCommonElements(page: Page): Promise<void> {
-    const knownClasses = ['.wd-products-nav'];
+    const knownClasses = ['.wd-products-nav', '.xoo-wsc-markup'];
     await page.evaluate((classes) => {
         classes.forEach((cls) => {
             const elements = document.querySelectorAll(cls);
