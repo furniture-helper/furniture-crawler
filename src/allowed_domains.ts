@@ -24,4 +24,7 @@ export const ALLOWED_DOMAINS = [
     'mansafit.com',
     'luxuryx.lk',
     'xclusive.lk',
+    'idealz.lk',
+    'gqmobiles.lk',
+    'laptop.lk',
 ];
