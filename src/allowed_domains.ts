@@ -27,4 +27,6 @@ export const ALLOWED_DOMAINS = [
     'idealz.lk',
     'gqmobiles.lk',
     'laptop.lk',
+    'onei.lk',
+    'abansit.lk',
 ];
