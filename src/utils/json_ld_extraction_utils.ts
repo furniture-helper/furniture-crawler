@@ -12,7 +12,12 @@ async function getJsonLdNodes(page: Page): Promise<JsonLdNode[]> {
     const nodes: JsonLdNode[] = [];
     for (const raw of scripts) {
         try {
-            const data = JSON.parse(raw);
+            // Literal newlines/carriage-returns inside JSON string values are
+            // invalid JSON (they must be escaped as \n). Normalise them to a
+            // space before parsing so malformed but otherwise readable scripts
+            // are not silently dropped.
+            const sanitised = raw.replace(/[\r\n]/g, ' ');
+            const data = JSON.parse(sanitised);
             if (Array.isArray(data)) {
                 nodes.push(...data);
             } else {
@@ -50,7 +55,7 @@ export async function extract_product_title(page: Page): Promise<string | null> 
     if (!product) return null;
 
     const name = product['name'];
-    return typeof name === 'string' ? name : null;
+    return typeof name === 'string' ? cleanProductTitle(name) : null;
 }
 
 function extractPriceFromOffers(node: JsonLdNode): number | null {
@@ -95,6 +100,20 @@ export async function extract_product_price(page: Page): Promise<number | null> 
     }
 
     return extractPriceFromOffers(product);
+}
+
+/**
+ * Strips site-branding suffixes from a product title.
+ * e.g. "Logitech K380s | Best Prices in Sri Lanka | Xclusive" → "Logitech K380s"
+ * Splits on " | " which sites use exclusively for branding suffixes.
+ */
+export function cleanProductTitle(raw: string): string {
+    const pipeParts = raw.split(' | ');
+    if (pipeParts.length > 1) {
+        return pipeParts[0].trim();
+    }
+
+    return raw.trim();
 }
 
 /**
@@ -168,7 +187,7 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
         const baseUrl = new URL(url);
         for (const variant of product['hasVariant'] as JsonLdNode[]) {
             const variantUrl = resolveVariantUrl(variant, baseUrl);
-            const variantName = typeof variant['name'] === 'string' ? variant['name'] : null;
+            const variantName = typeof variant['name'] === 'string' ? cleanProductTitle(variant['name']) : null;
             const variantPrice = extractPriceFromOffers(variant);
 
             if (!variantUrl || !variantName || variantPrice === null) {
@@ -182,7 +201,7 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
     }
 
     // Single Product node
-    const title = typeof product['name'] === 'string' ? product['name'] : null;
+    const title = typeof product['name'] === 'string' ? cleanProductTitle(product['name']) : null;
     const price = extractPriceFromOffers(product);
 
     if (title && price !== null) {
