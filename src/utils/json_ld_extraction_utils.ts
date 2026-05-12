@@ -97,6 +97,28 @@ export async function extract_product_price(page: Page): Promise<number | null> 
     return extractPriceFromOffers(product);
 }
 
+/**
+ * Resolves the best URL for a variant node.
+ * Prefers @id; falls back to offers[].url when @id is absent.
+ */
+function resolveVariantUrl(variant: JsonLdNode, baseUrl: URL): string | null {
+    if (typeof variant['@id'] === 'string') {
+        return new URL(variant['@id'], baseUrl).href.split('#')[0];
+    }
+
+    const offers = Array.isArray(variant['offers']) ? variant['offers'] : [variant['offers']];
+    for (const offer of offers) {
+        if (typeof offer === 'object' && offer !== null) {
+            const offerUrl = (offer as JsonLdNode)['url'];
+            if (typeof offerUrl === 'string' && offerUrl.length > 0) {
+                return new URL(offerUrl, baseUrl).href.split('#')[0];
+            }
+        }
+    }
+
+    return null;
+}
+
 async function upsertProductVariant(variantUrl: string, title: string, price: number): Promise<void> {
     await DatabaseUpsertQueue.markAsProductPage(variantUrl, 'DIRECTLY_INFERRED').catch((err) => {
         logger.error(
@@ -141,21 +163,19 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
         logger.error(`Error marking as product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`);
     });
 
-    // ProductGroup with variants — upsert each variant individually using its @id
+    // ProductGroup with variants — upsert each variant individually
     if (product['@type'] === 'ProductGroup' && Array.isArray(product['hasVariant'])) {
         const baseUrl = new URL(url);
         for (const variant of product['hasVariant'] as JsonLdNode[]) {
-            const variantId = typeof variant['@id'] === 'string' ? variant['@id'] : null;
+            const variantUrl = resolveVariantUrl(variant, baseUrl);
             const variantName = typeof variant['name'] === 'string' ? variant['name'] : null;
             const variantPrice = extractPriceFromOffers(variant);
 
-            if (!variantId || !variantName || variantPrice === null) {
-                logger.debug(`Skipping variant with missing @id, name, or price`);
+            if (!variantUrl || !variantName || variantPrice === null) {
+                logger.debug(`Skipping variant with missing url, name, or price`);
                 continue;
             }
 
-            // Resolve relative @id to absolute URL and strip the fragment
-            const variantUrl = new URL(variantId, baseUrl).href.split('#')[0];
             await upsertProductVariant(variantUrl, variantName, variantPrice);
         }
         return;
