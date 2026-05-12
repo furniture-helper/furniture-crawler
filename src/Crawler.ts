@@ -26,6 +26,7 @@ import {
 import { Queue } from './CrawlerQueue/Queue';
 import { getDomainFromUrl } from './utils/url_utils';
 import { AbortedRequestError } from './errors';
+import { extract_details_from_jsonld_schema } from './utils/json_ld_extraction_utils';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -169,6 +170,10 @@ export default class Crawler {
 
         await addNewUrls(request.loadedUrl, page).catch((err) => {
             logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
+        });
+
+        await extract_details_from_jsonld_schema(request.loadedUrl, page).catch((err) => {
+            logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
         });
     }
 

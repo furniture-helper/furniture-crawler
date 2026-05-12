@@ -1,0 +1,171 @@
+import { Page } from 'playwright';
+import logger from '../Logger';
+import DatabaseUpsertQueue from '../db/DBUpsertQueue';
+
+type JsonLdNode = Record<string, unknown>;
+
+async function getJsonLdNodes(page: Page): Promise<JsonLdNode[]> {
+    const scripts = await page.$$eval('script[type="application/ld+json"]', (els: HTMLScriptElement[]) =>
+        els.map((s) => s.textContent ?? ''),
+    );
+
+    const nodes: JsonLdNode[] = [];
+    for (const raw of scripts) {
+        try {
+            const data = JSON.parse(raw);
+            if (Array.isArray(data)) {
+                nodes.push(...data);
+            } else {
+                nodes.push(data);
+                if (Array.isArray(data['@graph'])) {
+                    nodes.push(...data['@graph']);
+                }
+            }
+        } catch {
+            // Malformed JSON-LD, skip
+        }
+    }
+    return nodes;
+}
+
+function findProductNode(nodes: JsonLdNode[]): JsonLdNode | undefined {
+    return nodes.find(
+        (n) => typeof n === 'object' && n !== null && (n['@type'] === 'Product' || n['@type'] === 'ProductGroup'),
+    );
+}
+
+export async function has_json_ld_schema(page: Page): Promise<boolean> {
+    const nodes = await getJsonLdNodes(page);
+    return nodes.length > 0;
+}
+
+export async function is_product_page(page: Page): Promise<boolean> {
+    const nodes = await getJsonLdNodes(page);
+    return findProductNode(nodes) !== undefined;
+}
+
+export async function extract_product_title(page: Page): Promise<string | null> {
+    const nodes = await getJsonLdNodes(page);
+    const product = findProductNode(nodes);
+    if (!product) return null;
+
+    const name = product['name'];
+    return typeof name === 'string' ? name : null;
+}
+
+function extractPriceFromOffers(node: JsonLdNode): number | null {
+    const offers = Array.isArray(node['offers']) ? node['offers'] : [node['offers']];
+
+    for (const offer of offers) {
+        if (typeof offer !== 'object' || offer === null) continue;
+        const o = offer as JsonLdNode;
+
+        // Try direct price field first
+        if (o['price'] !== undefined) {
+            const price = parseFloat(String(o['price']));
+            if (!isNaN(price)) return price;
+        }
+
+        // Try priceSpecification array (e.g. UnitPriceSpecification)
+        const specs = Array.isArray(o['priceSpecification']) ? o['priceSpecification'] : [o['priceSpecification']];
+        for (const spec of specs) {
+            if (typeof spec !== 'object' || spec === null) continue;
+            const s = spec as JsonLdNode;
+            const price = parseFloat(String(s['price']));
+            if (!isNaN(price)) return price;
+        }
+    }
+
+    return null;
+}
+
+export async function extract_product_price(page: Page): Promise<number | null> {
+    const nodes = await getJsonLdNodes(page);
+    const product = findProductNode(nodes);
+    if (!product) return null;
+
+    // For ProductGroup, collect prices from all hasVariant entries
+    if (product['@type'] === 'ProductGroup' && Array.isArray(product['hasVariant'])) {
+        const prices: number[] = [];
+        for (const variant of product['hasVariant'] as JsonLdNode[]) {
+            const price = extractPriceFromOffers(variant);
+            if (price !== null) prices.push(price);
+        }
+        return prices.length > 0 ? Math.min(...prices) : null;
+    }
+
+    return extractPriceFromOffers(product);
+}
+
+async function upsertProductVariant(variantUrl: string, title: string, price: number): Promise<void> {
+    await DatabaseUpsertQueue.markAsProductPage(variantUrl, 'DIRECTLY_INFERRED').catch((err) => {
+        logger.error(
+            `Error marking variant as product page ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+    });
+
+    if (title.endsWith('...')) {
+        logger.debug(`Variant title truncated, skipping title/price upsert for ${variantUrl}`);
+        return;
+    }
+
+    logger.debug(`Upserting variant from JSON-LD for ${variantUrl}: title=${title}, price=${price}`);
+    await DatabaseUpsertQueue.addProductTitleAndPrice(variantUrl, title, String(price)).catch((err) => {
+        logger.error(
+            `Error adding title/price for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+    });
+}
+
+export async function extract_details_from_jsonld_schema(url: string, page: Page): Promise<void> {
+    if (!(await has_json_ld_schema(page))) {
+        logger.debug(`No JSON-LD schema found for ${url}`);
+        return;
+    }
+
+    const nodes = await getJsonLdNodes(page);
+    const product = findProductNode(nodes);
+
+    if (!product) {
+        logger.debug(`Not a product page for ${url}`);
+        await DatabaseUpsertQueue.markAsNotProductPage(url, 'DIRECTLY_INFERRED').catch((err) => {
+            logger.error(
+                `Error marking as not product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        });
+        return;
+    }
+
+    // Mark the crawled page URL itself as a product page
+    await DatabaseUpsertQueue.markAsProductPage(url, 'DIRECTLY_INFERRED').catch((err) => {
+        logger.error(`Error marking as product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+
+    // ProductGroup with variants — upsert each variant individually using its @id
+    if (product['@type'] === 'ProductGroup' && Array.isArray(product['hasVariant'])) {
+        const baseUrl = new URL(url);
+        for (const variant of product['hasVariant'] as JsonLdNode[]) {
+            const variantId = typeof variant['@id'] === 'string' ? variant['@id'] : null;
+            const variantName = typeof variant['name'] === 'string' ? variant['name'] : null;
+            const variantPrice = extractPriceFromOffers(variant);
+
+            if (!variantId || !variantName || variantPrice === null) {
+                logger.debug(`Skipping variant with missing @id, name, or price`);
+                continue;
+            }
+
+            // Resolve relative @id to absolute URL and strip the fragment
+            const variantUrl = new URL(variantId, baseUrl).href.split('#')[0];
+            await upsertProductVariant(variantUrl, variantName, variantPrice);
+        }
+        return;
+    }
+
+    // Single Product node
+    const title = typeof product['name'] === 'string' ? product['name'] : null;
+    const price = extractPriceFromOffers(product);
+
+    if (title && price !== null) {
+        await upsertProductVariant(url, title, price);
+    }
+}

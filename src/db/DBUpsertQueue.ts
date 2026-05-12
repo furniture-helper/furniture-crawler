@@ -149,4 +149,88 @@ export default class DatabaseUpsertQueue {
             dbClient.release();
         }
     }
+
+    public static async markAsProductPage(url: string, s3_key: string): Promise<void> {
+        const query = `
+            INSERT INTO page_classifications (url, s3_key, type, last_classified_at, updated_at)
+            VALUES ($1, $2, 'product', $3, $3) ON CONFLICT (url) DO
+            UPDATE SET type = 'product',
+                s3_key = $2,
+                last_classified_at = $3,
+                updated_at = $3
+        `;
+        const values = [url, s3_key, new Date()];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing mark as product page for URL: ${url}`);
+
+        try {
+            logger.debug(`Executing mark as product page query for URL: ${url}`);
+            await dbClient.query(query, values);
+            logger.info(`Marked as product page URL ${url} into database.`);
+        } catch (err) {
+            logger.error(err, `Error marking as product page URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
+
+    public static async markAsNotProductPage(url: string, s3_key: string): Promise<void> {
+        const query = `
+            INSERT INTO page_classifications (url, s3_key, type, last_classified_at, updated_at)
+            VALUES ($1, $2, 'not_product', $3, $3) ON CONFLICT (url) DO
+            UPDATE SET type = 'not_product',
+                s3_key = $2,
+                last_classified_at = $3,
+                updated_at = $3
+        `;
+        const values = [url, s3_key, new Date()];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing mark as not product page for URL: ${url}`);
+
+        try {
+            logger.debug(`Executing mark as not product page query for URL: ${url}`);
+            await dbClient.query(query, values);
+            logger.info(`Marked as not product page URL ${url} into database.`);
+        } catch (err) {
+            logger.error(err, `Error marking as not product page URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
+
+    public static async addProductTitleAndPrice(url: string, title: string, price: string): Promise<void> {
+        const query = `
+            INSERT INTO page_inferred_labels (url, product_title, product_price, last_inferred_at, updated_at)
+            VALUES ($1, $2, $3, $4, $4) ON CONFLICT (url) DO
+            UPDATE SET product_title = EXCLUDED.product_title,
+                product_price = EXCLUDED.product_price,
+                last_inferred_at = EXCLUDED.last_inferred_at,
+                updated_at = EXCLUDED.updated_at
+        `;
+        const values = [url, title, price, new Date()];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing add product title and price for URL: ${url}`);
+
+        try {
+            logger.debug(`Upserting product title and price for URL: ${url}`);
+            await dbClient.query(query, values);
+            logger.info(`Upserted product title and price for URL ${url} into database.`);
+        } catch (err) {
+            logger.error(err, `Error marking as not product page URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
 }
