@@ -129,6 +129,11 @@ export function isBlacklistedUrl(url: string): boolean {
     const assetsPattern = /\/assets\//i;
     const trailingDomainInPathPattern =
         /^(?:https?:\/\/)?(?:www\.)?[^\/?#\s]+\.[a-zA-Z]{2,63}(?:\/[^?#\s]*)*\/[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.(?!(?:[Hh][Tt][Mm][Ll]|[Pp][Hh][Pp])(?:[\/?#]|$))[a-zA-Z]{2,63}(?:[\/?#]|$)/i;
+    const fireworksIzmirescortscPattern = /^https?:\/\/fireworks\.lk\/.*izmirescortsc/i;
+    const fireworkspendikkuaformPattern = /^https?:\/\/fireworks\.lk\/.*pendikkuafor/i;
+    const fireworksDelidayPattern = /^https?:\/\/fireworks\.lk\/.*deliday/i;
+    const fireworksCentralAcademySchoolPattern = /^https?:\/\/fireworks\.lk\/.*centralacademyschool/i;
+    const fireworksCoInPattern = /^https?:\/\/fireworks\.lk\/.*co.in/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -151,6 +156,11 @@ export function isBlacklistedUrl(url: string): boolean {
         fireworksUgandaPattern,
         assetsPattern,
         trailingDomainInPathPattern,
+        fireworksIzmirescortscPattern,
+        fireworkspendikkuaformPattern,
+        fireworksDelidayPattern,
+        fireworksCoInPattern,
+        fireworksCentralAcademySchoolPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
