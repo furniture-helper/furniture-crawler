@@ -29,4 +29,6 @@ export const ALLOWED_DOMAINS = [
     'laptop.lk',
     'onei.lk',
     'abansit.lk',
+    'mcentre.lk',
+    'chamacomputers.lk',
 ];
