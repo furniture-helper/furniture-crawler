@@ -169,11 +169,11 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
 
     if (!product) {
         logger.debug(`Not a product page for ${url}`);
-        await DatabaseUpsertQueue.markAsNotProductPage(url, 'DIRECTLY_INFERRED').catch((err) => {
-            logger.error(
-                `Error marking as not product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`,
-            );
-        });
+        // await DatabaseUpsertQueue.markAsNotProductPage(url, 'DIRECTLY_INFERRED').catch((err) => {
+        //     logger.error(
+        //         `Error marking as not product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`,
+        //     );
+        // });
         return;
     }
 
