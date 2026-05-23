@@ -31,4 +31,7 @@ export const ALLOWED_DOMAINS = [
     'abansit.lk',
     'mcentre.lk',
     'chamacomputers.lk',
+    'sense.lk',
+    'brownsdeals.com',
+    'techzone.lk',
 ];
