@@ -134,6 +134,12 @@ export function isBlacklistedUrl(url: string): boolean {
     const fireworksDelidayPattern = /^https?:\/\/fireworks\.lk\/.*deliday/i;
     const fireworksCentralAcademySchoolPattern = /^https?:\/\/fireworks\.lk\/.*centralacademyschool/i;
     const fireworksCoInPattern = /^https?:\/\/fireworks\.lk\/.*co.in/i;
+    // Matches fireworks.lk URLs whose last path segment looks like an external domain,
+    // including compound TLDs such as .com.tr, .co.uk, .net.tr, etc.
+    // e.g. https://fireworks.lk/product/some-item/ozakfiltre.com.tr
+    //      https://fireworks.lk/product/some-item/saluswater.co.uk
+    const fireworksTrailingExternalDomainPattern =
+        /^https?:\/\/fireworks\.lk\/(?:[^\/\s]+\/)+[a-zA-Z0-9][a-zA-Z0-9-]*\.(?!(?:html|php|asp|jsp)(?:[/?#]|$))[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:[/?#]|$)/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -161,6 +167,7 @@ export function isBlacklistedUrl(url: string): boolean {
         fireworksDelidayPattern,
         fireworksCoInPattern,
         fireworksCentralAcademySchoolPattern,
+        fireworksTrailingExternalDomainPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
