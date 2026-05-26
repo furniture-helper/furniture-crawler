@@ -25,13 +25,11 @@ export const ALLOWED_DOMAINS = [
     'luxuryx.lk',
     'xclusive.lk',
     'idealz.lk',
-    'gqmobiles.lk',
     'laptop.lk',
     'onei.lk',
     'abansit.lk',
     'mcentre.lk',
     'chamacomputers.lk',
-    'sense.lk',
     'brownsdeals.com',
     'techzone.lk',
 ];

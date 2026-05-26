@@ -140,6 +140,8 @@ export function isBlacklistedUrl(url: string): boolean {
     //      https://fireworks.lk/product/some-item/saluswater.co.uk
     const fireworksTrailingExternalDomainPattern =
         /^https?:\/\/fireworks\.lk\/(?:[^\/\s]+\/)+[a-zA-Z0-9][a-zA-Z0-9-]*\.(?!(?:html|php|asp|jsp)(?:[/?#]|$))[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:[/?#]|$)/i;
+    // Matches any URL whose path contains a +94 phone number segment (e.g. /+94773277277)
+    const phoneNumberInPathPattern = /\/\+94\d+/i;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -168,6 +170,7 @@ export function isBlacklistedUrl(url: string): boolean {
         fireworksCoInPattern,
         fireworksCentralAcademySchoolPattern,
         fireworksTrailingExternalDomainPattern,
+        phoneNumberInPathPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
