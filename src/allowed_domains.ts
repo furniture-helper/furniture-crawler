@@ -32,4 +32,9 @@ export const ALLOWED_DOMAINS = [
     'chamacomputers.lk',
     'brownsdeals.com',
     'techzone.lk',
+    'buyzone.lk',
+    'xmobile.lk',
+    'barclays.lk',
+    'gamestreet.lk',
+    'rooter.lk',
 ];
