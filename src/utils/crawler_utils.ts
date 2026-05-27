@@ -95,9 +95,10 @@ export async function waitForDomContentLoaded({ request, page }: PlaywrightCrawl
 }
 
 export function isBlacklistedUrl(url: string): boolean {
-    const doesUrlContainQueryParam = url.includes('?') || url.includes('&');
-    if (doesUrlContainQueryParam) {
-        logger.debug(`URL ${url} is blacklisted due to containing query parameters.`);
+    const queryString = url.includes('?') ? url.split('?')[1] : '';
+    const queryParamCount = queryString ? queryString.split('&').length : 0;
+    if (queryParamCount >= 2) {
+        logger.debug(`URL ${url} is blacklisted due to containing 2 or more query parameters.`);
         return true;
     }
 
