@@ -53,7 +53,7 @@ async function main() {
 
     try {
         logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
-        // await crawler.add('https://xcsdalusive.lk/asdsadsa/asdasdsa');
+        // await crawler.add('https://www.redlinetech.lk/rated-output/1000w/?orderby=price-desc');
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);
