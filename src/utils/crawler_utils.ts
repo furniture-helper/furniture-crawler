@@ -102,6 +102,33 @@ export function isBlacklistedUrl(url: string): boolean {
         return true;
     }
 
+    const blacklistedQueryParamKeywords = [
+        'filter',
+        'sort',
+        'orderby',
+        'stock_status',
+        'per_page',
+        'shop_view',
+        'price',
+        'pr_prod_strat',
+        'search',
+        'listview',
+        'yith_wcan',
+    ];
+
+    if (queryString) {
+        const matchedKeyword = queryString
+            .split('&')
+            .map((param) => param.split('=')[0].toLowerCase())
+            .find((key) => blacklistedQueryParamKeywords.some((keyword) => key.includes(keyword)));
+        if (matchedKeyword) {
+            logger.debug(
+                `URL ${url} is blacklisted due to query param key "${matchedKeyword}" matching a blacklisted keyword.`,
+            );
+            return true;
+        }
+    }
+
     const doesUrlContainExtension =
         /\.(jpg|jpeg|png|gif|bmp|svg|webp|mp4|mp3|avi|mov|wmv|flv|mkv|pdf|docx?|xlsx?|pptx?|zip|rar|7z|avif)(?:[?#]|$)/i.test(
             url,
@@ -116,6 +143,7 @@ export function isBlacklistedUrl(url: string): boolean {
         return true;
     }
 
+    const comparePattern = /\/compare(?:\/|$)/i;
     const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
     const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
     const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
@@ -152,6 +180,7 @@ export function isBlacklistedUrl(url: string): boolean {
         /\/cart\/?$/i,
         /\/checkout\/?$/i,
         /\/user\/profile\/?$/i,
+        comparePattern,
         wishListPattern,
         addToCartPattern,
         brochureDownloadPattern,
