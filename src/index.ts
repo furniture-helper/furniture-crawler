@@ -53,7 +53,7 @@ async function main() {
 
     try {
         logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
-        // await crawler.add('https://www.redlinetech.lk/rated-output/1000w/?orderby=price-desc');
+        // await crawler.add('https://techzone.lk/product/armaggeddon-raven-v-rgb-wired-gaming-mouse/?s');
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);

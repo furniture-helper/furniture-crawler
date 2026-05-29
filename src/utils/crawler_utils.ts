@@ -114,6 +114,8 @@ export function isBlacklistedUrl(url: string): boolean {
         'search',
         'listview',
         'yith_wcan',
+        's',
+        'product_cat',
     ];
 
     if (queryString) {
