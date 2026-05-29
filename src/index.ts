@@ -1,6 +1,7 @@
 import Crawler from './Crawler';
 import logger from './Logger';
 import { Queue } from './CrawlerQueue/Queue';
+import { getMaxRequestsPerCrawl } from './config';
 
 const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '60', 10) * 1000 * 60;
 const TIMEOUT_MESSAGE = `Timeout after ${timeOutDuration} ms`;
@@ -25,34 +26,34 @@ async function main() {
     Queue.init();
 
     let totalRequestsQueued = 0;
-    // while (true) {
-    //     const messages = await Queue.getMessages();
-    //     if (messages.length === 0) {
-    //         logger.info('No messages left in queue... Exiting.');
-    //         break;
-    //     }
-    //
-    //     for (const message of messages) {
-    //         logger.debug(`Adding URL from queue: ${message.url}`);
-    //         try {
-    //             await crawler.add(message.url);
-    //             totalRequestsQueued += 1;
-    //         } catch (err) {
-    //             logger.error(
-    //                 `Error Adding URL ${message.url}: ${err instanceof Error ? err.stack || err.message : String(err)}`,
-    //             );
-    //         }
-    //     }
-    //
-    //     if (totalRequestsQueued >= getMaxRequestsPerCrawl()) {
-    //         logger.info(`Reached max requests per crawl: ${getMaxRequestsPerCrawl()}`);
-    //         break;
-    //     }
-    // }
-    //
+    while (true) {
+        const messages = await Queue.getMessages();
+        if (messages.length === 0) {
+            logger.info('No messages left in queue... Exiting.');
+            break;
+        }
+
+        for (const message of messages) {
+            logger.debug(`Adding URL from queue: ${message.url}`);
+            try {
+                await crawler.add(message.url);
+                totalRequestsQueued += 1;
+            } catch (err) {
+                logger.error(
+                    `Error Adding URL ${message.url}: ${err instanceof Error ? err.stack || err.message : String(err)}`,
+                );
+            }
+        }
+
+        if (totalRequestsQueued >= getMaxRequestsPerCrawl()) {
+            logger.info(`Reached max requests per crawl: ${getMaxRequestsPerCrawl()}`);
+            break;
+        }
+    }
+
     try {
-        // logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
-        await crawler.add('https://techzone.lk/product/armaggeddon-raven-v-rgb-wired-gaming-mouse/?s');
+        logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
+        // await crawler.add('https://techzone.lk/product/armaggeddon-raven-v-rgb-wired-gaming-mouse/?s');
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);
