@@ -147,6 +147,7 @@ export function isBlacklistedUrl(url: string): boolean {
 
     const comparePattern = /\/compare(?:\/|$)/i;
     const dutyFreePattern = /duty[-_]?free/i;
+    const indexPhpPattern = /\/index\.php\/.+/i;
     const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
     const addToCartPattern = /(?:[?&]|^)add-to-cart=(\d+)(?:&|$)/;
     const brochureDownloadPattern = /\/brochure\/download\/(?:[^?#\s]*)/;
@@ -177,7 +178,7 @@ export function isBlacklistedUrl(url: string): boolean {
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
-        /\/login\/?$/i,
+        /\/login\/?(\?.*)?$/i,
         /\/signup\/?$/i,
         /\/register\/?$/i,
         /\/cart\/?$/i,
@@ -185,6 +186,7 @@ export function isBlacklistedUrl(url: string): boolean {
         /\/user\/profile\/?$/i,
         comparePattern,
         dutyFreePattern,
+        indexPhpPattern,
         wishListPattern,
         addToCartPattern,
         brochureDownloadPattern,
