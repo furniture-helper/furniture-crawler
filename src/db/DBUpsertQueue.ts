@@ -233,4 +233,31 @@ export default class DatabaseUpsertQueue {
             dbClient.release();
         }
     }
+
+    public static async addProductImage(url: string, image: string): Promise<void> {
+        const query = `
+            INSERT INTO page_inferred_labels (url, product_image_url, last_inferred_at, updated_at)
+            VALUES ($1, $2, $3, $3) ON CONFLICT (url) DO
+            UPDATE SET product_image_url = EXCLUDED.product_image_url,
+                last_inferred_at = EXCLUDED.last_inferred_at,
+                updated_at = EXCLUDED.updated_at
+        `;
+        const values = [url, image, new Date()];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing add product image for URL: ${url}`);
+
+        try {
+            logger.debug(`Upserting product image for URL: ${url}`);
+            await dbClient.query(query, values);
+            logger.info(`Upserted product image for URL ${url} into database.`);
+        } catch (err) {
+            logger.error(err, `Error upserting product image for URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
 }

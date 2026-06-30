@@ -138,7 +138,12 @@ function resolveVariantUrl(variant: JsonLdNode, baseUrl: URL): string | null {
     return null;
 }
 
-async function upsertProductVariant(variantUrl: string, title: string, price: number): Promise<void> {
+async function upsertProductVariant(
+    variantUrl: string,
+    title: string,
+    price: number,
+    image: string | null,
+): Promise<void> {
     await DatabaseUpsertQueue.markAsProductPage(variantUrl, 'DIRECTLY_INFERRED').catch((err) => {
         logger.error(
             `Error marking variant as product page ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
@@ -156,6 +161,15 @@ async function upsertProductVariant(variantUrl: string, title: string, price: nu
             `Error adding title/price for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
         );
     });
+
+    if (image) {
+        logger.debug(`Upserting variant image from JSON-LD for ${variantUrl}: image=${image}`);
+        await DatabaseUpsertQueue.addProductImage(variantUrl, image).catch((err) => {
+            logger.error(
+                `Error adding image for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        });
+    }
 }
 
 export async function extract_details_from_jsonld_schema(url: string, page: Page): Promise<void> {
@@ -189,13 +203,22 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
             const variantUrl = resolveVariantUrl(variant, baseUrl);
             const variantName = typeof variant['name'] === 'string' ? cleanProductTitle(variant['name']) : null;
             const variantPrice = extractPriceFromOffers(variant);
+            const rawVariantImage = variant['image'];
+            const variantImage: string | null =
+                typeof rawVariantImage === 'string' && rawVariantImage.trim().length > 0
+                    ? new URL(rawVariantImage, baseUrl).href.split('#')[0]
+                    : Array.isArray(rawVariantImage) &&
+                        typeof rawVariantImage[0] === 'string' &&
+                        rawVariantImage[0].trim().length > 0
+                      ? new URL(rawVariantImage[0], baseUrl).href.split('#')[0]
+                      : null;
 
             if (!variantUrl || !variantName || variantPrice === null) {
                 logger.debug(`Skipping variant with missing url, name, or price`);
                 continue;
             }
 
-            await upsertProductVariant(variantUrl, variantName, variantPrice);
+            await upsertProductVariant(variantUrl, variantName, variantPrice, variantImage);
         }
         return;
     }
@@ -203,8 +226,16 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
     // Single Product node
     const title = typeof product['name'] === 'string' ? cleanProductTitle(product['name']) : null;
     const price = extractPriceFromOffers(product);
+    const baseUrl = new URL(url);
+    const rawImage = product['image'];
+    const image: string | null =
+        typeof rawImage === 'string' && rawImage.trim().length > 0
+            ? new URL(rawImage, baseUrl).href.split('#')[0]
+            : Array.isArray(rawImage) && typeof rawImage[0] === 'string' && rawImage[0].trim().length > 0
+              ? new URL(rawImage[0], baseUrl).href.split('#')[0]
+              : null;
 
     if (title && price !== null) {
-        await upsertProductVariant(url, title, price);
+        await upsertProductVariant(url, title, price, image);
     }
 }
