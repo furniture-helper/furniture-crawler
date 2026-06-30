@@ -224,7 +224,14 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
     // Single Product node
     const title = typeof product['name'] === 'string' ? cleanProductTitle(product['name']) : null;
     const price = extractPriceFromOffers(product);
-    const image = typeof product['image'] === 'string' ? product['image'] : null;
+    const baseUrl = new URL(url);
+    const rawImage = product['image'];
+    const image: string | null =
+        typeof rawImage === 'string' && rawImage.trim().length > 0
+            ? new URL(rawImage, baseUrl).href.split('#')[0]
+            : Array.isArray(rawImage) && typeof rawImage[0] === 'string' && rawImage[0].trim().length > 0
+              ? new URL(rawImage[0], baseUrl).href.split('#')[0]
+              : null;
 
     if (title && price !== null) {
         await upsertProductVariant(url, title, price, image);
