@@ -203,7 +203,13 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
             const variantUrl = resolveVariantUrl(variant, baseUrl);
             const variantName = typeof variant['name'] === 'string' ? cleanProductTitle(variant['name']) : null;
             const variantPrice = extractPriceFromOffers(variant);
-            const variantImage: string | null = typeof variant['image'] === 'string' ? variant['image'] : null;
+            const rawVariantImage = variant['image'];
+            const variantImage: string | null =
+                typeof rawVariantImage === 'string' && rawVariantImage.trim().length > 0
+                    ? new URL(rawVariantImage, baseUrl).href.split('#')[0]
+                    : Array.isArray(rawVariantImage) && typeof rawVariantImage[0] === 'string' && rawVariantImage[0].trim().length > 0
+                      ? new URL(rawVariantImage[0], baseUrl).href.split('#')[0]
+                      : null;
 
             if (!variantUrl || !variantName || variantPrice === null) {
                 logger.debug(`Skipping variant with missing url, name, or price`);
