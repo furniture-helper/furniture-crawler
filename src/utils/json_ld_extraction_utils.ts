@@ -207,7 +207,9 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
             const variantImage: string | null =
                 typeof rawVariantImage === 'string' && rawVariantImage.trim().length > 0
                     ? new URL(rawVariantImage, baseUrl).href.split('#')[0]
-                    : Array.isArray(rawVariantImage) && typeof rawVariantImage[0] === 'string' && rawVariantImage[0].trim().length > 0
+                    : Array.isArray(rawVariantImage) &&
+                        typeof rawVariantImage[0] === 'string' &&
+                        rawVariantImage[0].trim().length > 0
                       ? new URL(rawVariantImage[0], baseUrl).href.split('#')[0]
                       : null;
 
