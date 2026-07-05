@@ -53,7 +53,7 @@ export async function checkForRedirect({ page, request }: PlaywrightCrawlingCont
 
     if (normalizedFinalUrl !== normalizedOriginalUrl) {
         logger.debug(`Redirect detected from ${originalUrl} to ${finalUrl}`);
-        await DatabaseUpsertQueue.markAsCrawled(originalUrl);
+        await DatabaseUpsertQueue.markAsCrawledRedirect(originalUrl);
         await Queue.deleteMessage(originalUrl);
         request.url = finalUrl;
         // Ensure the rest of the crawler logic sees the correct redirected URL
