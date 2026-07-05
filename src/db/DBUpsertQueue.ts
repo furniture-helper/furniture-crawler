@@ -91,23 +91,24 @@ export default class DatabaseUpsertQueue {
             logger.info(`Set URL ${url} as inactive in database.`);
         } catch (err) {
             this.checkedUrls.delete(url);
-            logger.error(err, `Error setting URL ${url} as inactive database.`);
+            logger.error(err, `Error setting URL ${url} as inactive in database.`);
             throw err;
         } finally {
             dbClient.release();
         }
     }
 
-    public static async markAsCrawled(url: string): Promise<void> {
+    public static async markAsCrawledRedirect(url: string): Promise<void> {
         const domain = getDomainFromUrl(url);
         logger.debug(`Domain extracted: ${domain} from URL: ${url}`);
 
         const query = `
-            INSERT INTO pages (url, domain, s3_key, last_crawled_at)
-            VALUES ($1, $2, 'REDIRECT', $3) ON CONFLICT (url) DO
+            INSERT INTO pages (url, domain, s3_key, last_crawled_at, is_active)
+            VALUES ($1, $2, 'REDIRECT', $3, false) ON CONFLICT (url) DO
             UPDATE SET domain = EXCLUDED.domain,
                 s3_key = 'REDIRECT',
-                last_crawled_at = $3
+                last_crawled_at = $3,
+                is_active = false
         `;
         const values = [url, domain, new Date()];
 
@@ -120,7 +121,7 @@ export default class DatabaseUpsertQueue {
             await dbClient.query(query, values);
             logger.info(`Marked as crawled URL ${url} into database.`);
         } catch (err) {
-            logger.error(err, `Error marking as crawl URL ${url} into database.`);
+            logger.error(err, `Error marking as crawled URL ${url} into database.`);
             throw err;
         } finally {
             logger.debug(`Releasing db connection for URL: ${url}`);

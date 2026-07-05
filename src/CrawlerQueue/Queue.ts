@@ -52,7 +52,7 @@ export class Queue {
                     await this.deleteMessage(url);
                     continue;
                 }
-                if (getDomainFromUrl(url) === 'lifemobile.lk') {
+                if (getDomainFromUrl(url) === 'lifemobile.lk' || getDomainFromUrl(url) === 'geniusmobile.lk') {
                     await this.deleteMessage(url);
                     continue;
                 }
