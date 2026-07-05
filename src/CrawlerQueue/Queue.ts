@@ -3,6 +3,7 @@ import logger from '../Logger';
 import { getMaxRequestsPerCrawl } from '../config';
 import { isBlacklistedUrl } from '../utils/crawler_utils';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
+import { getDomainFromUrl } from '../utils/url_utils';
 
 export type Message = {
     url: string;
@@ -48,6 +49,10 @@ export class Queue {
                 const url = message.Body;
                 if (isBlacklistedUrl(url)) {
                     await DatabaseUpsertQueue.deleteFromDatabase(url);
+                    await this.deleteMessage(url);
+                    continue;
+                }
+                if (getDomainFromUrl(url) === 'lifemobilelk') {
                     await this.deleteMessage(url);
                     continue;
                 }
