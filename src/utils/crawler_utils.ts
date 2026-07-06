@@ -145,7 +145,7 @@ export function isBlacklistedUrl(url: string): boolean {
         return true;
     }
 
-    const comparePattern = /\/compare(?:\/|$)/i;
+    const comparePattern = /\/compare(?:\/|\?|$)/i;
     const dutyFreePattern = /duty[-_]?free/i;
     const indexPhpPattern = /\/index\.php\/.+/i;
     const wishListPattern = /\/wishlist\/\d+\/addAj(?:\/|$)/;
@@ -158,6 +158,7 @@ export function isBlacklistedUrl(url: string): boolean {
     const checkoutsPattern = /\/checkouts(?:\/|$)/i;
     const collectionsProductsPattern = /\/collections\/[^\/]+\/products\//i;
     const authPattern = /\/auth\/[^\/\?#]+\/?$/i;
+    const currencyUsdPattern = /(?:[?&]|^)currency=USD(?:&|$)/i;
     const fireworksUgandaPattern = /^https?:\/\/fireworks\.lk\/.*uganda/i;
     const assetsPattern = /\/assets\//i;
     const trailingDomainInPathPattern =
@@ -197,6 +198,7 @@ export function isBlacklistedUrl(url: string): boolean {
         checkoutsPattern,
         collectionsProductsPattern,
         authPattern,
+        currencyUsdPattern,
         fireworksUgandaPattern,
         assetsPattern,
         trailingDomainInPathPattern,
