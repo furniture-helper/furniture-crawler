@@ -7,6 +7,7 @@ import {
     getPageStorageConstructor,
     getRequestHandlerTimeoutSecs,
 } from './config';
+import { launchOptions } from 'camoufox-js';
 
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
@@ -27,6 +28,7 @@ import { Queue } from './CrawlerQueue/Queue';
 import { getDomainFromUrl } from './utils/url_utils';
 import { AbortedRequestError } from './errors';
 import { extract_details_from_jsonld_schema } from './utils/json_ld_extraction_utils';
+import { firefox } from 'playwright';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -34,7 +36,7 @@ Configuration.set('maxUsedCpuRatio', 0.8);
 Configuration.set('containerized', true);
 
 export default class Crawler {
-    private readonly crawler: PlaywrightCrawler;
+    private crawler!: PlaywrightCrawler;
     private readonly settings = {
         headless: true,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
@@ -57,7 +59,7 @@ export default class Crawler {
         level: log.LEVELS.INFO,
     });
 
-    constructor() {
+    private constructor() {
         const originalError = this.crawlerLog.error.bind(this.crawlerLog);
 
         this.crawlerLog.error = (message?: unknown, ...optionalParams: unknown[]) => {
@@ -77,23 +79,45 @@ export default class Crawler {
 
             originalError(message as any);
         };
-        this.crawler = new PlaywrightCrawler({
-            ...this.settings,
-            log: this.crawlerLog,
-            preNavigationHooks: [
-                checkForBlackListedUrl.bind(this),
-                this.isInIgnoredDomain.bind(this),
-                waitForDomContentLoaded.bind(this),
-                blockAds.bind(this),
-                blockIframes.bind(this),
-                blockUnnecessaryResources.bind(this),
-            ],
-            postNavigationHooks: [checkForRedirect.bind(this)],
+    }
 
-            requestHandler: this.requestHandler.bind(this),
-            failedRequestHandler: this.failedRequestHandler.bind(this),
-            errorHandler: this.errorHandler.bind(this),
+    public static async create(): Promise<Crawler> {
+        const launchOptionsConfig = await launchOptions({
+            headless: true,
         });
+
+        const instance = new Crawler();
+
+        instance.crawler = new PlaywrightCrawler({
+            ...instance.settings,
+            log: instance.crawlerLog,
+            preNavigationHooks: [
+                checkForBlackListedUrl.bind(instance),
+                instance.isInIgnoredDomain.bind(instance),
+                waitForDomContentLoaded.bind(instance),
+                blockAds.bind(instance),
+                blockIframes.bind(instance),
+                blockUnnecessaryResources.bind(instance),
+            ],
+            postNavigationHooks: [
+                async ({ handleCloudflareChallenge }) => {
+                    await handleCloudflareChallenge();
+                },
+                checkForRedirect.bind(instance),
+            ],
+            requestHandler: instance.requestHandler.bind(instance),
+            failedRequestHandler: instance.failedRequestHandler.bind(instance),
+            errorHandler: instance.errorHandler.bind(instance),
+            browserPoolOptions: {
+                useFingerprints: false,
+            },
+            launchContext: {
+                launcher: firefox,
+                launchOptions: launchOptionsConfig,
+            },
+        });
+
+        return instance;
     }
 
     public async run() {
