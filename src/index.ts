@@ -1,9 +1,9 @@
 import Crawler from './Crawler';
-import { getStartUrl } from './config';
 import logger from './Logger';
-import { gracefulShutdown } from './db/pgClient';
+import { Queue } from './CrawlerQueue/Queue';
+import { getMaxRequestsPerCrawl } from './config';
 
-const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '30', 10) * 1000 * 60;
+const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '60', 10) * 1000 * 60;
 const TIMEOUT_MESSAGE = `Timeout after ${timeOutDuration} ms`;
 
 const timeout = async (promise: Promise<void>, time: number) => {
@@ -19,15 +19,59 @@ const timeout = async (promise: Promise<void>, time: number) => {
 };
 
 async function main() {
+    logger.info(`Initializing crawler...`);
     const crawler = new Crawler();
-    const startUrl = getStartUrl();
+
+    logger.info(`Initializing queue...`);
+    Queue.init();
+
+    let totalRequestsQueued = 0;
+    while (true) {
+        const messages = await Queue.getMessages();
+        if (messages.length === 0) {
+            logger.info('No messages left in queue... Exiting.');
+            break;
+        }
+
+        for (const message of messages) {
+            logger.debug(`Adding URL from queue: ${message.url}`);
+            try {
+                await crawler.add(message.url);
+                totalRequestsQueued += 1;
+            } catch (err) {
+                logger.error(
+                    `Error Adding URL ${message.url}: ${err instanceof Error ? err.stack || err.message : String(err)}`,
+                );
+            }
+        }
+
+        if (totalRequestsQueued >= getMaxRequestsPerCrawl()) {
+            logger.info(`Reached max requests per crawl: ${getMaxRequestsPerCrawl()}`);
+            break;
+        }
+    }
 
     try {
-        await timeout(crawler.run(startUrl), timeOutDuration);
+        logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
+        // await crawler.add('https://techzone.lk/product/armaggeddon-raven-v-rgb-wired-gaming-mouse/?s');
+        await timeout(crawler.run(), timeOutDuration);
+
+        logger.info(`Crawl completed successfully, exiting...`);
+
+        // wait 10s
+        logger.info(`Waiting 10s before exiting to allow for graceful shutdown...`);
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+
+        process.exit(0);
     } catch (error) {
         if (error === TIMEOUT_MESSAGE) {
+            logger.info(`Crawl timed out after ${timeOutDuration} ms, stopping crawler...`);
             crawler.stop('TIMEOUT');
-            await gracefulShutdown('TIMEOUT');
+
+            //wait 15s
+            logger.info(`Waiting 15s before exiting to allow for graceful shutdown...`);
+            await new Promise((resolve) => setTimeout(resolve, 15000));
+
             process.exit(0);
         }
         throw error;

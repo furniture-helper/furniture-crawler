@@ -1,158 +1,244 @@
-import { Configuration, PlaywrightCrawler, playwrightUtils } from 'crawlee';
+import { Configuration, log, Log, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
     getMaxRequestsPerMinute,
+    getNavigationTimeoutSecs,
     getPageStorageConstructor,
+    getRequestHandlerTimeoutSecs,
 } from './config';
 
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
+import DatabaseUpsertQueue from './db/DBUpsertQueue';
+import {
+    addNewUrls,
+    blockAds,
+    blockIframes,
+    blockUnnecessaryResources,
+    checkForBlackListedUrl,
+    checkForRedirect,
+    isUselessPage,
+    removeCommonElements,
+    resolveToAbsoluteUrls,
+    waitForDomContentLoaded,
+} from './utils/crawler_utils';
+import { Queue } from './CrawlerQueue/Queue';
+import { getDomainFromUrl } from './utils/url_utils';
+import { AbortedRequestError } from './errors';
+import { extract_details_from_jsonld_schema } from './utils/json_ld_extraction_utils';
+
+Configuration.set('systemInfoV2', true);
+Configuration.set('availableMemoryRatio', 0.8);
+Configuration.set('maxUsedCpuRatio', 0.8);
+Configuration.set('containerized', true);
 
 export default class Crawler {
     private readonly crawler: PlaywrightCrawler;
+    private readonly settings = {
+        headless: true,
+        maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
+        maxConcurrency: getMaxConcurrency(),
+        maxRequestsPerMinute: getMaxRequestsPerMinute(),
+        autoscaledPoolOptions: {
+            desiredConcurrencyRatio: 0.8,
+            maxConcurrency: getMaxConcurrency(),
+        },
+        requestHandlerTimeoutSecs: getRequestHandlerTimeoutSecs(),
+        persistCookiesPerSession: true,
+        navigationTimeoutSecs: getNavigationTimeoutSecs(),
+        maxRequestRetries: 3,
+    };
+
+    private readonly pageStorageConstructor = getPageStorageConstructor();
+    private readonly backoffDomains: Map<string, Date> = new Map();
+
+    private readonly crawlerLog = new Log({
+        level: log.LEVELS.INFO,
+    });
 
     constructor() {
-        const pageStorageConstructor = getPageStorageConstructor();
+        const originalError = this.crawlerLog.error.bind(this.crawlerLog);
 
-        this.crawler = new PlaywrightCrawler(
-            {
-                headless: true,
-                maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
-                maxConcurrency: getMaxConcurrency(),
-                maxRequestsPerMinute: getMaxRequestsPerMinute(),
-                autoscaledPoolOptions: {
-                    desiredConcurrencyRatio: 0.8,
-                    maxConcurrency: getMaxConcurrency(),
-                },
-                requestHandlerTimeoutSecs: 120,
+        this.crawlerLog.error = (message?: unknown, ...optionalParams: unknown[]) => {
+            const text = [message, ...optionalParams]
+                .map((v) => (typeof v === 'string' ? v : v instanceof Error ? v.message : JSON.stringify(v)))
+                .join(' ');
 
-                preNavigationHooks: [
-                    // Wait for DOM content to be loaded before proceeding
-                    (context, gotoOptions) => {
-                        gotoOptions.waitUntil = 'domcontentloaded';
+            // Suppress only this control-flow failure noise
+            if (
+                text.includes('AbortedRequestError') ||
+                text.includes('Aborted request for ') ||
+                text.includes('received 403 status code') ||
+                text.includes('received 429 status code')
+            ) {
+                return;
+            }
+
+            originalError(message as any);
+        };
+        this.crawler = new PlaywrightCrawler({
+            ...this.settings,
+            log: this.crawlerLog,
+            preNavigationHooks: [
+                checkForBlackListedUrl.bind(this),
+                this.isInIgnoredDomain.bind(this),
+                waitForDomContentLoaded.bind(this),
+                blockAds.bind(this),
+                blockIframes.bind(this),
+                blockUnnecessaryResources.bind(this),
+            ],
+            postNavigationHooks: [checkForRedirect.bind(this)],
+
+            requestHandler: this.requestHandler.bind(this),
+            failedRequestHandler: this.failedRequestHandler.bind(this),
+            errorHandler: this.errorHandler.bind(this),
+            browserPoolOptions: {
+                useFingerprints: true,
+                fingerprintOptions: {
+                    useFingerprintCache: true,
+                    fingerprintGeneratorOptions: {
+                        devices: ['desktop'],
+                        operatingSystems: ['linux', 'macos', 'windows'],
                     },
-
-                    // Block unnecessary resources to speed up crawling
-                    async ({ page }) => {
-                        // This single line blocks images, fonts, css, and media
-                        await playwrightUtils.blockRequests(page);
-                    },
-
-                    // Intercept responses to detect downloads via headers
-                    async ({ page, request }) => {
-                        await page.route(request.url, async (route) => {
-                            try {
-                                // Fetch the response manually to check headers
-                                const response = await route.fetch();
-                                const headers = response.headers();
-
-                                // Check triggers: "attachment" in disposition OR common file types
-                                const contentDisposition = headers['content-disposition'] || '';
-                                const contentType = headers['content-type'] || '';
-
-                                const isDownload =
-                                    contentDisposition.includes('attachment') ||
-                                    /application\/pdf|application\/zip|application\/octet-stream/.test(contentType);
-
-                                if (isDownload) {
-                                    logger.info(`Download detected (${contentType}): ${request.url}`);
-                                    request.noRetry = true;
-                                    request.userData = { ...(request.userData || {}), isDownload: true };
-                                    request.skipNavigation = true;
-
-                                    // Fulfill with a simple response to skip actual download
-                                    await route.fulfill({
-                                        status: 200,
-                                        contentType: 'text/html; charset=utf-8',
-                                        body: '<html><body>Download skipped</body></html>',
-                                    });
-                                } else {
-                                    await route.fulfill({ response });
-                                }
-                            } catch {
-                                // If the manual fetch fails (e.g. network error), let default behavior take over
-                                route.continue().catch(() => {});
-                            }
-                        });
-                    },
-                ],
-
-                async requestHandler({ request, page, enqueueLinks }) {
-                    if (request.userData?.isDownload) {
-                        logger.info(`Skipping processing for download URL: ${request.url}`);
-                        return;
-                    }
-
-                    const startTime = Date.now();
-
-                    logger.info(`Parsing page: ${request.loadedUrl}`);
-                    await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
-                    await page.waitForLoadState('load');
-
-                    // Wait 5s just in case some JS needs to run
-                    await page.waitForTimeout(5000);
-
-                    // wait for network to be idle (or timeout after 10 seconds)
-                    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
-                        logger.warn(`Network idle timeout for ${request.loadedUrl}`);
-                    });
-
-                    logger.info(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
-
-                    await page.evaluate(() => {
-                        const resolveToAbsolute = (attrName: string, propName: string) => {
-                            const selector = attrName === 'src' ? `[${attrName}]:not(script)` : `[${attrName}]`;
-
-                            const elements = document.querySelectorAll(selector);
-                            elements.forEach((el) => {
-                                const element = el as any;
-
-                                const absoluteUrl = element[propName];
-
-                                if (typeof absoluteUrl === 'string' && absoluteUrl.trim() !== '') {
-                                    element.setAttribute(attrName, absoluteUrl);
-                                }
-                            });
-                        };
-
-                        resolveToAbsolute('href', 'href');
-                        resolveToAbsolute('src', 'src');
-                        resolveToAbsolute('action', 'action');
-                        resolveToAbsolute('data', 'data');
-                    });
-                    logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
-
-                    // A specialization is a set of custom actions that will be applied to a page from a specific website.
-                    // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
-                    const specialization = await getSpecialization(request.loadedUrl, page);
-                    if (specialization) {
-                        logger.debug(`Resolving specialization for ${request.loadedUrl}`);
-                        await specialization.apply();
-                    }
-
-                    // Store the page using the selected storage mechanism
-                    logger.debug(`Working on storing page: ${request.loadedUrl}`);
-                    const storage = new pageStorageConstructor(request.loadedUrl, page);
-                    await storage.store();
-
-                    logger.debug(`Enqueuing links found on page: ${request.loadedUrl}`);
-                    await enqueueLinks();
                 },
             },
-            new Configuration({
-                availableMemoryRatio: 0.8,
-                maxUsedCpuRatio: 0.8,
-                disableBrowserSandbox: true,
-            }),
-        );
+        });
     }
 
-    public async run(startUrl: string) {
-        await this.crawler.run([startUrl]);
+    public async run() {
+        await this.crawler.run();
+    }
+
+    public async add(url: string) {
+        await this.crawler.addRequests([url]);
     }
 
     public stop(reason: string) {
         this.crawler.stop(reason);
+    }
+
+    private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
+        if (request.userData?.isDownload) {
+            await this.removeFromQueueAndSetInactive(request.url);
+            return;
+        }
+
+        if (request.skipNavigation) {
+            return;
+        }
+
+        if (!request.loadedUrl) {
+            logger.error(`No loaded URL for request: ${request.url}`);
+            await this.removeFromQueueAndSetInactive(request.url);
+            return;
+        }
+
+        const startTime = Date.now();
+
+        logger.debug(`Parsing page: ${request.loadedUrl}`);
+
+        // Abort loading of unnecessary resources to speed up page load
+        await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
+
+        await page.waitForLoadState('load');
+
+        // wait for network to be idle (or timeout after 5 seconds)
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
+            logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+        });
+
+        logger.debug(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
+
+        // Check if the page is considered "useless" and should not be crawled
+        if (await isUselessPage(request.loadedUrl, page)) {
+            logger.debug(`Skipping useless page: ${request.loadedUrl}`);
+            await this.removeFromQueueAndSetInactive(request.url);
+            return;
+        }
+
+        // A specialization is a set of custom actions that will be applied to a page from a specific website.
+        // For example, hiding pop-ups, closing modals, or any other action that improves data extraction.
+        const specialization = await getSpecialization(request.loadedUrl, page);
+        if (specialization) {
+            logger.debug(`Resolving specialization for ${request.loadedUrl}`);
+            await specialization.apply();
+        }
+
+        await resolveToAbsoluteUrls(page);
+        logger.debug(`Resolved relative URLs to absolute for page: ${request.loadedUrl}`);
+
+        await removeCommonElements(page);
+
+        // Store the page using the selected storage mechanism
+        logger.debug(`Working on storing page: ${request.loadedUrl}`);
+        const storage = new this.pageStorageConstructor(request.loadedUrl, page);
+        await storage.store();
+
+        await Queue.deleteMessage(request.url);
+        logger.debug(`Completed processing for page: ${request.loadedUrl}`);
+
+        await addNewUrls(request.loadedUrl, page).catch((err) => {
+            logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
+        });
+
+        await extract_details_from_jsonld_schema(request.loadedUrl, page).catch((err) => {
+            logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
+        });
+    }
+
+    private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        if (error instanceof AbortedRequestError) {
+            return;
+        }
+
+        logger.error(error, `Request failed for ${request.url}`);
+
+        if (
+            error instanceof Error &&
+            (error.message.includes('received 429 status code') || error.message.includes('received 403 status code'))
+        ) {
+            const domain = getDomainFromUrl(request.url);
+            this.backoffDomains.set(domain, new Date());
+        }
+    }
+
+    private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        if (error instanceof AbortedRequestError) {
+            return;
+        }
+
+        if (
+            error instanceof Error &&
+            (error.message.includes('received 429 status code') || error.message.includes('received 403 status code'))
+        ) {
+            request.noRetry = true;
+            const domain = getDomainFromUrl(request.url);
+            this.backoffDomains.set(domain, new Date());
+        }
+    }
+
+    private async removeFromQueueAndSetInactive(url: string): Promise<void> {
+        await DatabaseUpsertQueue.setInactive(url);
+        await Queue.deleteMessage(url);
+    }
+
+    private isInIgnoredDomain({ request }: PlaywrightCrawlingContext) {
+        const domain = getDomainFromUrl(request.url);
+        if (this.backoffDomains.has(domain)) {
+            const backOffStart = this.backoffDomains.get(domain)!;
+            const backOffDuration = 60 * 1000; // 1 minute backoff
+            const timeSinceBackoff = Date.now() - backOffStart.getTime();
+            if (timeSinceBackoff < backOffDuration) {
+                logger.info(
+                    `Backing off from domain ${domain} for ${Math.ceil((backOffDuration - timeSinceBackoff) / 1000)} seconds`,
+                );
+                request.noRetry = true;
+                request.skipNavigation = true;
+                throw new AbortedRequestError(request.url);
+            } else {
+                this.backoffDomains.delete(domain);
+            }
+        }
     }
 }

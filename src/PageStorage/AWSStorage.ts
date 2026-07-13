@@ -17,6 +17,7 @@ export default class AWSStorage extends PageStorage {
 
         logger.debug(`Fetching page content for URL: ${this.url}`);
         const pageHtml = await this.page.content();
+
         const safeFileName = this.url.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const key = `${safeFileName}.html`;
 
@@ -53,6 +54,6 @@ export default class AWSStorage extends PageStorage {
 
     private async upsertToDatabase(s3Key: string): Promise<void> {
         logger.debug(`Enqueuing database upsert for URL: ${this.url} with S3 key: ${s3Key}`);
-        await DatabaseUpsertQueue.enqueueUpsert(this.url, s3Key);
+        await DatabaseUpsertQueue.upsertPage(this.url, s3Key);
     }
 }
