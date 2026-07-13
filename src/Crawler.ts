@@ -1,4 +1,9 @@
 import { Configuration, log, Log, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
+import { execFile } from 'node:child_process';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -34,6 +39,10 @@ Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
 Configuration.set('maxUsedCpuRatio', 0.8);
 Configuration.set('containerized', true);
+
+const execFileAsync = promisify(execFile);
+const CAMOUFOX_EXECUTABLE_CANDIDATES = ['camoufox-bin', 'camoufox', 'firefox', 'firefox-bin', 'camoufox.exe'];
+const NPX_EXECUTABLE = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 export default class Crawler {
     private crawler!: PlaywrightCrawler;
@@ -82,9 +91,7 @@ export default class Crawler {
     }
 
     public static async create(): Promise<Crawler> {
-        const launchOptionsConfig = await launchOptions({
-            headless: true,
-        });
+        const launchOptionsConfig = await Crawler.getCamoufoxLaunchOptions();
 
         const instance = new Crawler();
 
@@ -118,6 +125,102 @@ export default class Crawler {
         });
 
         return instance;
+    }
+
+    private static getCamoufoxInstallDir(): string {
+        return process.env.CAMOUFOX_INSTALL_DIR || path.join(os.homedir(), '.cache', 'camoufox');
+    }
+
+    private static async getCamoufoxCliInstallDir(): Promise<string | null> {
+        try {
+            const { stdout } = await execFileAsync(NPX_EXECUTABLE, ['camoufox-js', 'path'], {
+                env: process.env,
+            });
+            const resolved = stdout
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .find((line) => line.length > 0);
+            return resolved || null;
+        } catch {
+            return null;
+        }
+    }
+
+    private static findCamoufoxExecutable(dir: string): string | null {
+        if (!existsSync(dir)) {
+            return null;
+        }
+
+        const stack = [dir];
+
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (!current) continue;
+
+            for (const entry of readdirSync(current)) {
+                const fullPath = path.join(current, entry);
+                const stats = statSync(fullPath);
+
+                if (stats.isDirectory()) {
+                    stack.push(fullPath);
+                    continue;
+                }
+
+                if (CAMOUFOX_EXECUTABLE_CANDIDATES.includes(entry)) {
+                    return fullPath;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static async buildCamoufoxLaunchOptions() {
+        const installDirs = [
+            Crawler.getCamoufoxInstallDir(),
+            path.join(os.homedir(), '.cache', 'camoufox'),
+            '/root/.cache/camoufox',
+            '/tmp/camoufox',
+        ];
+        const cliInstallDir = await Crawler.getCamoufoxCliInstallDir();
+        if (cliInstallDir) {
+            installDirs.unshift(cliInstallDir);
+        }
+
+        const executablePath = [...new Set(installDirs)]
+            .map((dir) => Crawler.findCamoufoxExecutable(dir))
+            .find((value): value is string => Boolean(value));
+
+        return await launchOptions({
+            headless: true,
+            ...(executablePath ? { executable_path: executablePath } : {}),
+        });
+    }
+
+    private static async getCamoufoxLaunchOptions() {
+        try {
+            return await Crawler.buildCamoufoxLaunchOptions();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const needsInstall =
+                message.includes('CamoufoxNotInstalled') ||
+                message.includes('Version information not found') ||
+                message.includes('Please run `camoufox fetch` to install.');
+
+            if (!needsInstall) {
+                throw err;
+            }
+
+            logger.warn(`Camoufox browser payload missing; fetching it now.`);
+            await execFileAsync(NPX_EXECUTABLE, ['camoufox-js', 'fetch'], {
+                env: {
+                    ...process.env,
+                    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '0',
+                },
+            });
+
+            return await Crawler.buildCamoufoxLaunchOptions();
+        }
     }
 
     public async run() {
