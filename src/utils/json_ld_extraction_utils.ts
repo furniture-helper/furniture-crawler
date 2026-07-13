@@ -84,6 +84,46 @@ function extractPriceFromOffers(node: JsonLdNode): number | null {
     return null;
 }
 
+function parseAvailability(value: unknown): boolean | null {
+    if (typeof value !== 'string') return null;
+
+    const normalized = value
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\/schema\.org\//, '')
+        .split(/[\/#]/)
+        .pop();
+
+    switch (normalized) {
+        case 'instock':
+        case 'limitedavailability':
+            return true;
+        case 'outofstock':
+        case 'soldout':
+        case 'discontinued':
+        case 'backorder':
+        case 'preorder':
+        case 'presale':
+            return false;
+        default:
+            return null;
+    }
+}
+
+function extractAvailabilityFromOffers(node: JsonLdNode): boolean | null {
+    const offers = Array.isArray(node['offers']) ? node['offers'] : [node['offers']];
+    let sawOutOfStock = false;
+
+    for (const offer of offers) {
+        if (typeof offer !== 'object' || offer === null) continue;
+        const availability = parseAvailability((offer as JsonLdNode)['availability']);
+        if (availability === true) return true;
+        if (availability === false) sawOutOfStock = true;
+    }
+
+    return sawOutOfStock ? false : null;
+}
+
 export async function extract_product_price(page: Page): Promise<number | null> {
     const nodes = await getJsonLdNodes(page);
     const product = findProductNode(nodes);
@@ -100,6 +140,24 @@ export async function extract_product_price(page: Page): Promise<number | null> 
     }
 
     return extractPriceFromOffers(product);
+}
+
+export async function extract_product_in_stock(page: Page): Promise<boolean | null> {
+    const nodes = await getJsonLdNodes(page);
+    const product = findProductNode(nodes);
+    if (!product) return null;
+
+    if (product['@type'] === 'ProductGroup' && Array.isArray(product['hasVariant'])) {
+        let sawOutOfStock = false;
+        for (const variant of product['hasVariant'] as JsonLdNode[]) {
+            const inStock = extractAvailabilityFromOffers(variant);
+            if (inStock === true) return true;
+            if (inStock === false) sawOutOfStock = true;
+        }
+        return sawOutOfStock ? false : null;
+    }
+
+    return extractAvailabilityFromOffers(product);
 }
 
 /**
@@ -140,9 +198,10 @@ function resolveVariantUrl(variant: JsonLdNode, baseUrl: URL): string | null {
 
 async function upsertProductVariant(
     variantUrl: string,
-    title: string,
-    price: number,
+    title: string | null,
+    price: number | null,
     image: string | null,
+    inStock: boolean | null,
 ): Promise<void> {
     await DatabaseUpsertQueue.markAsProductPage(variantUrl, 'DIRECTLY_INFERRED').catch((err) => {
         logger.error(
@@ -150,23 +209,39 @@ async function upsertProductVariant(
         );
     });
 
-    if (title.endsWith('...')) {
-        logger.debug(`Variant title truncated, skipping title/price upsert for ${variantUrl}`);
-        return;
-    }
-
-    logger.debug(`Upserting variant from JSON-LD for ${variantUrl}: title=${title}, price=${price}`);
-    await DatabaseUpsertQueue.addProductTitleAndPrice(variantUrl, title, String(price)).catch((err) => {
+    await DatabaseUpsertQueue.checkAndInsertNewUrl(variantUrl).catch((err) => {
         logger.error(
-            `Error adding title/price for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+            `Error checking/inserting new variant URL ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
         );
     });
+
+    if (!title || price === null) {
+        logger.debug(`Variant missing title or price, skipping title/price upsert for ${variantUrl}`);
+    } else if (title.endsWith('...')) {
+        logger.debug(`Variant title truncated, skipping title/price upsert for ${variantUrl}`);
+    } else {
+        logger.debug(`Upserting variant from JSON-LD for ${variantUrl}: title=${title}, price=${price}`);
+        await DatabaseUpsertQueue.addProductTitleAndPrice(variantUrl, title, String(price)).catch((err) => {
+            logger.error(
+                `Error adding title/price for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        });
+    }
 
     if (image) {
         logger.debug(`Upserting variant image from JSON-LD for ${variantUrl}: image=${image}`);
         await DatabaseUpsertQueue.addProductImage(variantUrl, image).catch((err) => {
             logger.error(
                 `Error adding image for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        });
+    }
+
+    if (inStock !== null) {
+        logger.debug(`Upserting variant stock status from JSON-LD for ${variantUrl}: in_stock=${inStock}`);
+        await DatabaseUpsertQueue.addProductStockStatus(variantUrl, inStock).catch((err) => {
+            logger.error(
+                `Error adding stock status for variant ${variantUrl}: ${err instanceof Error ? err.message : String(err)}`,
             );
         });
     }
@@ -203,6 +278,7 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
             const variantUrl = resolveVariantUrl(variant, baseUrl);
             const variantName = typeof variant['name'] === 'string' ? cleanProductTitle(variant['name']) : null;
             const variantPrice = extractPriceFromOffers(variant);
+            const variantInStock = extractAvailabilityFromOffers(variant);
             const rawVariantImage = variant['image'];
             const variantImage: string | null =
                 typeof rawVariantImage === 'string' && rawVariantImage.trim().length > 0
@@ -213,12 +289,12 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
                       ? new URL(rawVariantImage[0], baseUrl).href.split('#')[0]
                       : null;
 
-            if (!variantUrl || !variantName || variantPrice === null) {
-                logger.debug(`Skipping variant with missing url, name, or price`);
+            if (!variantUrl) {
+                logger.debug(`Skipping variant with missing url`);
                 continue;
             }
 
-            await upsertProductVariant(variantUrl, variantName, variantPrice, variantImage);
+            await upsertProductVariant(variantUrl, variantName, variantPrice, variantImage, variantInStock);
         }
         return;
     }
@@ -226,6 +302,7 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
     // Single Product node
     const title = typeof product['name'] === 'string' ? cleanProductTitle(product['name']) : null;
     const price = extractPriceFromOffers(product);
+    const inStock = extractAvailabilityFromOffers(product);
     const baseUrl = new URL(url);
     const rawImage = product['image'];
     const image: string | null =
@@ -235,7 +312,5 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
               ? new URL(rawImage[0], baseUrl).href.split('#')[0]
               : null;
 
-    if (title && price !== null) {
-        await upsertProductVariant(url, title, price, image);
-    }
+    await upsertProductVariant(url, title, price, image, inStock);
 }
