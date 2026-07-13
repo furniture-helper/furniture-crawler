@@ -13,7 +13,7 @@ COPY --from=builder /app/package*.json ./
 RUN npm install --omit=dev
 RUN npx camoufox-js fetch
 RUN test -f "$CAMOUFOX_INSTALL_DIR/version.json"
-RUN node --input-type=module -e "import { launchPath } from 'camoufox-js/dist/pkgman.js'; console.log(launchPath())"
+RUN npx camoufox-js version
 RUN npm install playwright
 RUN npx playwright install --with-deps
 CMD ["node", "dist/index.js"]
