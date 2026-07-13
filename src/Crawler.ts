@@ -93,6 +93,16 @@ export default class Crawler {
             requestHandler: this.requestHandler.bind(this),
             failedRequestHandler: this.failedRequestHandler.bind(this),
             errorHandler: this.errorHandler.bind(this),
+            browserPoolOptions: {
+                useFingerprints: true,
+                fingerprintOptions: {
+                    useFingerprintCache: true,
+                    fingerprintGeneratorOptions: {
+                        devices: ['desktop'],
+                        operatingSystems: ['linux', 'macos', 'windows'],
+                    },
+                },
+            },
         });
     }
 
