@@ -13,7 +13,7 @@ COPY --from=builder /app/package*.json ./
 RUN npm install --omit=dev
 RUN npx camoufox-js fetch
 RUN test -f "$CAMOUFOX_INSTALL_DIR/version.json"
-RUN test -f "$CAMOUFOX_INSTALL_DIR/camoufox-bin"
+RUN npx camoufox-js version
 RUN npm install playwright
-RUN npx playwright install --with-deps
+RUN npx playwright install-deps firefox
 CMD ["node", "dist/index.js"]
