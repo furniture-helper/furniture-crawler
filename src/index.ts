@@ -1,7 +1,7 @@
-import Crawler from './Crawler';
 import logger from './Logger';
-import { Queue } from './CrawlerQueue/Queue';
+import Crawler from './Crawler';
 import { getMaxRequestsPerCrawl } from './config';
+import { Queue } from './CrawlerQueue/Queue';
 
 const timeOutDuration = parseInt(process.env.TIMEOUT_MINS || '60', 10) * 1000 * 60;
 const TIMEOUT_MESSAGE = `Timeout after ${timeOutDuration} ms`;
@@ -20,7 +20,7 @@ const timeout = async (promise: Promise<void>, time: number) => {
 
 async function main() {
     logger.info(`Initializing crawler...`);
-    const crawler = new Crawler();
+    const crawler = await Crawler.create();
 
     logger.info(`Initializing queue...`);
     Queue.init();
@@ -52,8 +52,8 @@ async function main() {
     }
 
     try {
-        logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
-        // await crawler.add('https://techzone.lk/product/armaggeddon-raven-v-rgb-wired-gaming-mouse/?s');
+        // // logger.info(`Starting crawler with ${totalRequestsQueued} URLs in queue`);
+        // await crawler.add('https://fireworks.lk');
         await timeout(crawler.run(), timeOutDuration);
 
         logger.info(`Crawl completed successfully, exiting...`);
