@@ -36,7 +36,7 @@ Configuration.set('containerized', true);
 export default class Crawler {
     private crawler!: PlaywrightCrawler;
     private readonly settings = {
-        headless: true,
+        headless: false,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
         maxConcurrency: getMaxConcurrency(),
         maxRequestsPerMinute: getMaxRequestsPerMinute(),
@@ -97,6 +97,10 @@ export default class Crawler {
             preNavigationHooks: [
                 checkForBlackListedUrl.bind(instance),
                 instance.isInIgnoredDomain.bind(instance),
+                async ({}, gotoOptions) => {
+                    gotoOptions.timeout = 30_000; // 30s
+                    gotoOptions.waitUntil = 'domcontentloaded';
+                },
                 async ({ page }) => {
                     await page.route('**/*', (route) => {
                         const requestType = route.request().resourceType();
@@ -198,7 +202,10 @@ export default class Crawler {
         // Abort loading of unnecessary resources to speed up page load
         await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
 
-        await page.waitForLoadState('load');
+        // await page.waitForLoadState('load');
+        await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {
+            logger.debug(`Load timeout for ${request.loadedUrl}`);
+        });
 
         // wait for network to be idle (or timeout after 5 seconds)
         await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
