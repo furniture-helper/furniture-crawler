@@ -113,7 +113,7 @@ export class Queue {
             }
         }
 
-        logger.info(`Received ${result.length} messages from SQS`);
+        logger.debug(`Received ${result.length} messages from SQS`);
         return result;
     }
 

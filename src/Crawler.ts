@@ -202,7 +202,7 @@ export default class Crawler {
 
         // wait for network to be idle (or timeout after 5 seconds)
         await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
-            logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+            logger.debug(`Network idle timeout for ${request.loadedUrl}`);
         });
 
         logger.debug(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
@@ -247,7 +247,7 @@ export default class Crawler {
         await this.addToQueue();
     }
 
-    private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+    private async failedRequestHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
         await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
@@ -264,7 +264,7 @@ export default class Crawler {
         }
     }
 
-    private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+    private async errorHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
         await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;

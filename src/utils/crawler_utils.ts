@@ -119,6 +119,19 @@ export function isBlacklistedUrl(url: string): boolean {
     ];
 
     if (queryString) {
+        const paginationParamKeys = new Set(['page', 'paged']);
+        for (const [rawKey, rawValue] of new URLSearchParams(queryString)) {
+            const key = rawKey.toLowerCase();
+            if (!paginationParamKeys.has(key)) continue;
+            if (!/^\d+$/.test(rawValue)) continue;
+
+            const pageNumber = Number(rawValue);
+            if (pageNumber > 5) {
+                logger.debug(`URL ${url} is blacklisted due to pagination query param "${rawKey}=${rawValue}".`);
+                return true;
+            }
+        }
+
         const matchedKeyword = queryString
             .split('&')
             .map((param) => param.split('=')[0].toLowerCase())
