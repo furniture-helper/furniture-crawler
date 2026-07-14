@@ -1,4 +1,6 @@
 import { Configuration, log, Log, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
+import { firefox } from 'playwright';
+import { launchOptions as createCamoufoxLaunchOptions } from 'camoufox-js';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -7,7 +9,8 @@ import {
     getPageStorageConstructor,
     getRequestHandlerTimeoutSecs,
 } from './config';
-
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
@@ -34,7 +37,7 @@ Configuration.set('maxUsedCpuRatio', 0.8);
 Configuration.set('containerized', true);
 
 export default class Crawler {
-    private readonly crawler: PlaywrightCrawler;
+    private crawler!: PlaywrightCrawler;
     private readonly settings = {
         headless: true,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
@@ -57,7 +60,7 @@ export default class Crawler {
         level: log.LEVELS.INFO,
     });
 
-    constructor() {
+    private constructor() {
         const originalError = this.crawlerLog.error.bind(this.crawlerLog);
 
         this.crawlerLog.error = (message?: unknown, ...optionalParams: unknown[]) => {
@@ -65,7 +68,6 @@ export default class Crawler {
                 .map((v) => (typeof v === 'string' ? v : v instanceof Error ? v.message : JSON.stringify(v)))
                 .join(' ');
 
-            // Suppress only this control-flow failure noise
             if (
                 text.includes('AbortedRequestError') ||
                 text.includes('Aborted request for ') ||
@@ -77,33 +79,74 @@ export default class Crawler {
 
             originalError(message as any);
         };
-        this.crawler = new PlaywrightCrawler({
-            ...this.settings,
-            log: this.crawlerLog,
-            preNavigationHooks: [
-                checkForBlackListedUrl.bind(this),
-                this.isInIgnoredDomain.bind(this),
-                waitForDomContentLoaded.bind(this),
-                blockAds.bind(this),
-                blockIframes.bind(this),
-                blockUnnecessaryResources.bind(this),
-            ],
-            postNavigationHooks: [checkForRedirect.bind(this)],
+    }
 
-            requestHandler: this.requestHandler.bind(this),
-            failedRequestHandler: this.failedRequestHandler.bind(this),
-            errorHandler: this.errorHandler.bind(this),
+    public static async create(): Promise<Crawler> {
+        const instance = new Crawler();
+
+        const installDir = process.env.CAMOUFOX_INSTALL_DIR || '/app/.cache/camoufox';
+        const executablePath = Crawler.findCamoufoxExecutable(installDir);
+
+        const camoufoxLaunchOptions = await createCamoufoxLaunchOptions({
+            headless: instance.settings.headless,
+            humanize: true,
+            os: ['windows', 'macos', 'linux'],
+            ...(executablePath ? { executable_path: executablePath } : {}),
+        });
+
+        instance.crawler = new PlaywrightCrawler({
+            ...instance.settings,
+            log: instance.crawlerLog,
+            preNavigationHooks: [
+                checkForBlackListedUrl.bind(instance),
+                instance.isInIgnoredDomain.bind(instance),
+                waitForDomContentLoaded.bind(instance),
+                blockAds.bind(instance),
+                blockIframes.bind(instance),
+                blockUnnecessaryResources.bind(instance),
+            ],
+            postNavigationHooks: [checkForRedirect.bind(instance)],
+            requestHandler: instance.requestHandler.bind(instance),
+            failedRequestHandler: instance.failedRequestHandler.bind(instance),
+            errorHandler: instance.errorHandler.bind(instance),
             browserPoolOptions: {
-                useFingerprints: true,
-                fingerprintOptions: {
-                    useFingerprintCache: true,
-                    fingerprintGeneratorOptions: {
-                        devices: ['desktop'],
-                        operatingSystems: ['linux', 'macos', 'windows'],
-                    },
-                },
+                useFingerprints: false,
+            },
+            launchContext: {
+                launcher: firefox,
+                launchOptions: camoufoxLaunchOptions,
             },
         });
+
+        return instance;
+    }
+
+    private static findCamoufoxExecutable(dir: string): string | null {
+        if (!existsSync(dir)) return null;
+
+        const candidates = ['camoufox-bin', 'camoufox', 'firefox', 'firefox-bin', 'camoufox.exe'];
+        const stack = [dir];
+
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (!current) continue;
+
+            for (const entry of readdirSync(current)) {
+                const fullPath = path.join(current, entry);
+                const stats = statSync(fullPath);
+
+                if (stats.isDirectory()) {
+                    stack.push(fullPath);
+                    continue;
+                }
+
+                if (candidates.includes(entry)) {
+                    return fullPath;
+                }
+            }
+        }
+
+        return null;
     }
 
     public async run() {

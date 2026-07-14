@@ -20,7 +20,7 @@ const timeout = async (promise: Promise<void>, time: number) => {
 
 async function main() {
     logger.info(`Initializing crawler...`);
-    const crawler = new Crawler();
+    const crawler = await Crawler.create();
 
     logger.info(`Initializing queue...`);
     Queue.init();
