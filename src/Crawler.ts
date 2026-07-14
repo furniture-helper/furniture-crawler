@@ -16,9 +16,6 @@ import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
 import {
     addNewUrls,
-    blockAds,
-    blockIframes,
-    blockUnnecessaryResources,
     checkForBlackListedUrl,
     checkForRedirect,
     isUselessPage,
@@ -39,7 +36,7 @@ Configuration.set('containerized', true);
 export default class Crawler {
     private crawler!: PlaywrightCrawler;
     private readonly settings = {
-        headless: true,
+        headless: false,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
         maxConcurrency: getMaxConcurrency(),
         maxRequestsPerMinute: getMaxRequestsPerMinute(),
@@ -100,10 +97,24 @@ export default class Crawler {
             preNavigationHooks: [
                 checkForBlackListedUrl.bind(instance),
                 instance.isInIgnoredDomain.bind(instance),
+                async ({ page }) => {
+                    await page.route('**/*', (route) => {
+                        const requestType = route.request().resourceType();
+
+                        // Block heavy or unnecessary resources to save ECS memory/bandwidth
+                        const blockedTypes = ['image', 'stylesheet', 'media', 'font', 'other'];
+
+                        if (blockedTypes.includes(requestType)) {
+                            route.abort();
+                        } else {
+                            route.continue();
+                        }
+                    });
+                },
                 waitForDomContentLoaded.bind(instance),
-                blockAds.bind(instance),
-                blockIframes.bind(instance),
-                blockUnnecessaryResources.bind(instance),
+                // blockAds.bind(instance),
+                // blockIframes.bind(instance),
+                // blockUnnecessaryResources.bind(instance),
             ],
             postNavigationHooks: [checkForRedirect.bind(instance)],
             requestHandler: instance.requestHandler.bind(instance),
