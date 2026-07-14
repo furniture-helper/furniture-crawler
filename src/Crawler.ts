@@ -175,16 +175,19 @@ export default class Crawler {
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
         if (request.skipNavigation) {
+            await this.addToQueue();
             return;
         }
 
         if (!request.loadedUrl) {
             logger.error(`No loaded URL for request: ${request.url}`);
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
@@ -208,6 +211,7 @@ export default class Crawler {
         if (await isUselessPage(request.loadedUrl, page)) {
             logger.debug(`Skipping useless page: ${request.loadedUrl}`);
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
@@ -239,9 +243,12 @@ export default class Crawler {
         await extract_details_from_jsonld_schema(request.loadedUrl, page).catch((err) => {
             logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
         });
+
+        await this.addToQueue();
     }
 
     private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
@@ -258,6 +265,7 @@ export default class Crawler {
     }
 
     private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
@@ -269,6 +277,25 @@ export default class Crawler {
             request.noRetry = true;
             const domain = getDomainFromUrl(request.url);
             this.backoffDomains.set(domain, new Date());
+        }
+    }
+
+    private async addToQueue(): Promise<void> {
+        const pending = this.crawler.requestQueue?.getPendingCount() || 999999;
+        logger.debug(`Crawler request list size: ${pending}`);
+        if (pending >= 5) return;
+
+        try {
+            const messages = await Queue.getMessage();
+            for (const message of messages) {
+                await this.add(message.url);
+            }
+        } catch (err) {
+            if (err instanceof Error && err.message === 'No messages received from SQS') {
+                logger.info('No messages in the queue to add.');
+            } else {
+                logger.error(err, 'Error adding new URL from queue');
+            }
         }
     }
 
