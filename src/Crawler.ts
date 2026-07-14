@@ -36,7 +36,7 @@ Configuration.set('containerized', true);
 export default class Crawler {
     private crawler!: PlaywrightCrawler;
     private readonly settings = {
-        headless: false,
+        headless: true,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
         maxConcurrency: getMaxConcurrency(),
         maxRequestsPerMinute: getMaxRequestsPerMinute(),
