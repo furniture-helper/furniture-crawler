@@ -114,6 +114,11 @@ export class Queue {
         }
 
         logger.debug(`Received ${result.length} messages from SQS`);
+
+        if (result.length === 0) {
+            return await this.getMessage();
+        }
+
         return result;
     }
 

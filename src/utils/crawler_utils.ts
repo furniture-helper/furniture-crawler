@@ -95,6 +95,11 @@ export async function waitForDomContentLoaded({ request, page }: PlaywrightCrawl
 }
 
 export function isBlacklistedUrl(url: string): boolean {
+    if (url.length > 150) {
+        logger.debug(`URL ${url} is blacklisted due to exceeding 150 characters.`);
+        return true;
+    }
+
     const queryString = url.includes('?') ? url.split('?')[1] : '';
     const queryParamCount = queryString ? queryString.split('&').length : 0;
     if (queryParamCount >= 2) {
@@ -189,6 +194,7 @@ export function isBlacklistedUrl(url: string): boolean {
         /^https?:\/\/fireworks\.lk\/(?:[^\/\s]+\/)+[a-zA-Z0-9][a-zA-Z0-9-]*\.(?!(?:html|php|asp|jsp)(?:[/?#]|$))[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:[/?#]|$)/i;
     // Matches any URL whose path contains a +94 phone number segment (e.g. /+94773277277)
     const phoneNumberInPathPattern = /\/\+94\d+/i;
+    const suspiciousCharsInQueryPattern = /[="\']([^&]*[="\'][^&]*)/;
 
     const blacklistedPatterns = [
         /\/auth\/?$/i,
@@ -222,6 +228,7 @@ export function isBlacklistedUrl(url: string): boolean {
         fireworksCentralAcademySchoolPattern,
         fireworksTrailingExternalDomainPattern,
         phoneNumberInPathPattern,
+        suspiciousCharsInQueryPattern,
     ];
     const matchesPattern = blacklistedPatterns.some((pattern) => pattern.test(url));
     if (matchesPattern) {
