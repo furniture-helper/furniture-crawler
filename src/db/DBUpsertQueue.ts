@@ -169,7 +169,7 @@ export default class DatabaseUpsertQueue {
         try {
             logger.debug(`Executing mark as product page query for URL: ${url}`);
             await dbClient.query(query, values);
-            logger.info(`Marked as product page URL ${url} into database.`);
+            logger.debug(`Marked as product page URL ${url} into database.`);
         } catch (err) {
             logger.error(err, `Error marking as product page URL ${url} into database.`);
             throw err;
@@ -197,7 +197,7 @@ export default class DatabaseUpsertQueue {
         try {
             logger.debug(`Executing mark as not product page query for URL: ${url}`);
             await dbClient.query(query, values);
-            logger.info(`Marked as not product page URL ${url} into database.`);
+            logger.debug(`Marked as not product page URL ${url} into database.`);
         } catch (err) {
             logger.error(err, `Error marking as not product page URL ${url} into database.`);
             throw err;
@@ -225,7 +225,7 @@ export default class DatabaseUpsertQueue {
         try {
             logger.debug(`Upserting product title and price for URL: ${url}`);
             await dbClient.query(query, values);
-            logger.info(`Upserted product title and price for URL ${url} into database.`);
+            logger.debug(`Upserted product title and price for URL ${url} into database.`);
         } catch (err) {
             logger.error(err, `Error marking as not product page URL ${url} into database.`);
             throw err;
@@ -252,7 +252,7 @@ export default class DatabaseUpsertQueue {
         try {
             logger.debug(`Upserting product image for URL: ${url}`);
             await dbClient.query(query, values);
-            logger.info(`Upserted product image for URL ${url} into database.`);
+            logger.debug(`Upserted product image for URL ${url} into database.`);
         } catch (err) {
             logger.error(err, `Error upserting product image for URL ${url} into database.`);
             throw err;
@@ -279,9 +279,35 @@ export default class DatabaseUpsertQueue {
         try {
             logger.debug(`Upserting product stock status for URL: ${url}`);
             await dbClient.query(query, values);
-            logger.info(`Upserted product stock status for URL ${url} into database.`);
+            logger.debug(`Upserted product stock status for URL ${url} into database.`);
         } catch (err) {
             logger.error(err, `Error upserting product stock status for URL ${url} into database.`);
+            throw err;
+        } finally {
+            logger.debug(`Releasing db connection for URL: ${url}`);
+            dbClient.release();
+        }
+    }
+
+    public static async wasCrawledInLast(url: string, hours: number): Promise<boolean> {
+        const query = `
+            SELECT EXISTS (SELECT 1
+                           FROM pages
+                           WHERE url = $1
+                             AND last_crawled_at >= NOW() - INTERVAL '${hours} hours') AS was_crawled;
+        `;
+        const values = [url];
+
+        logger.debug(`Attempting to get db connection for URL: ${url}`);
+        const dbClient = await getPgClient();
+        logger.debug(`DB connection acquired. Executing was crawled in last for URL: ${url}`);
+
+        try {
+            logger.debug(`Checking if URL: ${url} was crawled in the last ${hours} hours`);
+            const result = await dbClient.query(query, values);
+            return result.rows[0].was_crawled;
+        } catch (err) {
+            logger.error(err, `Error checking if URL: ${url} was crawled in the last ${hours} hours`);
             throw err;
         } finally {
             logger.debug(`Releasing db connection for URL: ${url}`);

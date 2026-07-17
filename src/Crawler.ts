@@ -1,4 +1,6 @@
 import { Configuration, log, Log, PlaywrightCrawler, PlaywrightCrawlingContext } from 'crawlee';
+import { firefox } from 'playwright';
+import { launchOptions as createCamoufoxLaunchOptions } from 'camoufox-js';
 import {
     getMaxConcurrency,
     getMaxRequestsPerCrawl,
@@ -7,15 +9,13 @@ import {
     getPageStorageConstructor,
     getRequestHandlerTimeoutSecs,
 } from './config';
-
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { getSpecialization } from './Specializations/Specialization';
 import logger from './Logger';
 import DatabaseUpsertQueue from './db/DBUpsertQueue';
 import {
     addNewUrls,
-    blockAds,
-    blockIframes,
-    blockUnnecessaryResources,
     checkForBlackListedUrl,
     checkForRedirect,
     isUselessPage,
@@ -34,7 +34,7 @@ Configuration.set('maxUsedCpuRatio', 0.8);
 Configuration.set('containerized', true);
 
 export default class Crawler {
-    private readonly crawler: PlaywrightCrawler;
+    private crawler!: PlaywrightCrawler;
     private readonly settings = {
         headless: true,
         maxRequestsPerCrawl: getMaxRequestsPerCrawl(),
@@ -57,7 +57,7 @@ export default class Crawler {
         level: log.LEVELS.INFO,
     });
 
-    constructor() {
+    private constructor() {
         const originalError = this.crawlerLog.error.bind(this.crawlerLog);
 
         this.crawlerLog.error = (message?: unknown, ...optionalParams: unknown[]) => {
@@ -65,7 +65,6 @@ export default class Crawler {
                 .map((v) => (typeof v === 'string' ? v : v instanceof Error ? v.message : JSON.stringify(v)))
                 .join(' ');
 
-            // Suppress only this control-flow failure noise
             if (
                 text.includes('AbortedRequestError') ||
                 text.includes('Aborted request for ') ||
@@ -77,33 +76,92 @@ export default class Crawler {
 
             originalError(message as any);
         };
-        this.crawler = new PlaywrightCrawler({
-            ...this.settings,
-            log: this.crawlerLog,
-            preNavigationHooks: [
-                checkForBlackListedUrl.bind(this),
-                this.isInIgnoredDomain.bind(this),
-                waitForDomContentLoaded.bind(this),
-                blockAds.bind(this),
-                blockIframes.bind(this),
-                blockUnnecessaryResources.bind(this),
-            ],
-            postNavigationHooks: [checkForRedirect.bind(this)],
+    }
 
-            requestHandler: this.requestHandler.bind(this),
-            failedRequestHandler: this.failedRequestHandler.bind(this),
-            errorHandler: this.errorHandler.bind(this),
-            browserPoolOptions: {
-                useFingerprints: true,
-                fingerprintOptions: {
-                    useFingerprintCache: true,
-                    fingerprintGeneratorOptions: {
-                        devices: ['desktop'],
-                        operatingSystems: ['linux', 'macos', 'windows'],
-                    },
+    public static async create(): Promise<Crawler> {
+        const instance = new Crawler();
+
+        const installDir = process.env.CAMOUFOX_INSTALL_DIR || '/app/.cache/camoufox';
+        const executablePath = Crawler.findCamoufoxExecutable(installDir);
+
+        const camoufoxLaunchOptions = await createCamoufoxLaunchOptions({
+            headless: instance.settings.headless,
+            humanize: true,
+            os: ['windows', 'macos', 'linux'],
+            ...(executablePath ? { executable_path: executablePath } : {}),
+        });
+
+        instance.crawler = new PlaywrightCrawler({
+            ...instance.settings,
+            log: instance.crawlerLog,
+            preNavigationHooks: [
+                checkForBlackListedUrl.bind(instance),
+                instance.isInIgnoredDomain.bind(instance),
+                async ({}, gotoOptions) => {
+                    gotoOptions.timeout = 30_000; // 30s
+                    gotoOptions.waitUntil = 'domcontentloaded';
                 },
+                async ({ page }) => {
+                    await page.route('**/*', (route) => {
+                        const requestType = route.request().resourceType();
+
+                        // Block heavy or unnecessary resources to save ECS memory/bandwidth
+                        const blockedTypes = ['image', 'stylesheet', 'media', 'font', 'other'];
+
+                        if (blockedTypes.includes(requestType)) {
+                            route.abort();
+                        } else {
+                            route.continue();
+                        }
+                    });
+                },
+                waitForDomContentLoaded.bind(instance),
+                // blockAds.bind(instance),
+                // blockIframes.bind(instance),
+                // blockUnnecessaryResources.bind(instance),
+            ],
+            postNavigationHooks: [checkForRedirect.bind(instance)],
+            requestHandler: instance.requestHandler.bind(instance),
+            failedRequestHandler: instance.failedRequestHandler.bind(instance),
+            errorHandler: instance.errorHandler.bind(instance),
+            browserPoolOptions: {
+                useFingerprints: false,
+            },
+            launchContext: {
+                launcher: firefox,
+                launchOptions: camoufoxLaunchOptions,
             },
         });
+
+        return instance;
+    }
+
+    private static findCamoufoxExecutable(dir: string): string | null {
+        if (!existsSync(dir)) return null;
+
+        const candidates = ['camoufox-bin', 'camoufox', 'firefox', 'firefox-bin', 'camoufox.exe'];
+        const stack = [dir];
+
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (!current) continue;
+
+            for (const entry of readdirSync(current)) {
+                const fullPath = path.join(current, entry);
+                const stats = statSync(fullPath);
+
+                if (stats.isDirectory()) {
+                    stack.push(fullPath);
+                    continue;
+                }
+
+                if (candidates.includes(entry)) {
+                    return fullPath;
+                }
+            }
+        }
+
+        return null;
     }
 
     public async run() {
@@ -121,16 +179,19 @@ export default class Crawler {
     private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
         if (request.skipNavigation) {
+            await this.addToQueue();
             return;
         }
 
         if (!request.loadedUrl) {
             logger.error(`No loaded URL for request: ${request.url}`);
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
@@ -141,11 +202,14 @@ export default class Crawler {
         // Abort loading of unnecessary resources to speed up page load
         await page.route('**/*.{png,jpg,jpeg,gif,css,woff}', (route) => route.abort());
 
-        await page.waitForLoadState('load');
+        // await page.waitForLoadState('load');
+        await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {
+            logger.debug(`Load timeout for ${request.loadedUrl}`);
+        });
 
         // wait for network to be idle (or timeout after 5 seconds)
         await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
-            logger.warn(`Network idle timeout for ${request.loadedUrl}`);
+            logger.debug(`Network idle timeout for ${request.loadedUrl}`);
         });
 
         logger.debug(`Page loaded: ${request.loadedUrl} in ${Date.now() - startTime} ms`);
@@ -154,6 +218,7 @@ export default class Crawler {
         if (await isUselessPage(request.loadedUrl, page)) {
             logger.debug(`Skipping useless page: ${request.loadedUrl}`);
             await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
             return;
         }
 
@@ -185,9 +250,12 @@ export default class Crawler {
         await extract_details_from_jsonld_schema(request.loadedUrl, page).catch((err) => {
             logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
         });
+
+        await this.addToQueue();
     }
 
-    private async failedRequestHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+    private async failedRequestHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
+        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
@@ -203,7 +271,8 @@ export default class Crawler {
         }
     }
 
-    private async errorHandler({ request, error }: PlaywrightCrawlingContext): Promise<void> {
+    private async errorHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
+        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
@@ -215,6 +284,25 @@ export default class Crawler {
             request.noRetry = true;
             const domain = getDomainFromUrl(request.url);
             this.backoffDomains.set(domain, new Date());
+        }
+    }
+
+    private async addToQueue(): Promise<void> {
+        const pending = this.crawler.requestQueue?.getPendingCount() || 999999;
+        logger.debug(`Crawler request list size: ${pending}`);
+        if (pending >= 5) return;
+
+        try {
+            const messages = await Queue.getMessage();
+            for (const message of messages) {
+                await this.add(message.url);
+            }
+        } catch (err) {
+            if (err instanceof Error && err.message === 'No messages received from SQS') {
+                logger.info('No messages in the queue to add.');
+            } else {
+                logger.error(err, 'Error adding new URL from queue');
+            }
         }
     }
 
