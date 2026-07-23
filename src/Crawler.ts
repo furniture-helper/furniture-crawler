@@ -47,7 +47,7 @@ export default class Crawler {
         requestHandlerTimeoutSecs: getRequestHandlerTimeoutSecs(),
         persistCookiesPerSession: true,
         navigationTimeoutSecs: getNavigationTimeoutSecs(),
-        maxRequestRetries: 3,
+        maxRequestRetries: 0,
     };
 
     private readonly pageStorageConstructor = getPageStorageConstructor();
