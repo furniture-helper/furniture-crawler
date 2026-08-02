@@ -99,6 +99,13 @@ export class Queue {
                 Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
 
                 const url = message.Body;
+
+                if (getDomainFromUrl(url) === 'barclays.lk') {
+                    await DatabaseUpsertQueue.setInactive(url);
+                    await this.deleteMessage(url);
+                    continue;
+                }
+
                 if (isBlacklistedUrl(url)) {
                     await DatabaseUpsertQueue.deleteFromDatabase(url);
                     await this.deleteMessage(url);
