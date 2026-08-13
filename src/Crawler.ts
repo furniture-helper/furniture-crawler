@@ -180,11 +180,9 @@ export default class Crawler {
         this.crawler.stop(reason);
     }
 
-    private async requestHandler({ request, page, response }: PlaywrightCrawlingContext): Promise<void> {
+    private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
         const startTime = Date.now();
         request.userData.startTime = startTime;
-
-        request.userData.statusCode = response?.status() ?? 0;
 
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
@@ -259,11 +257,9 @@ export default class Crawler {
         });
 
         const duration = Date.now() - startTime;
-        await this.eventsManager
-            .pushEvent(request.loadedUrl, duration, CrawlerEventStatus.SUCCESS, 200)
-            .catch((err) => {
-                logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
-            });
+        await this.eventsManager.pushEvent(request.loadedUrl, duration, CrawlerEventStatus.SUCCESS).catch((err) => {
+            logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
+        });
 
         await this.addToQueue();
     }
@@ -293,7 +289,6 @@ export default class Crawler {
                 request.url,
                 duration,
                 CrawlerEventStatus.FAILURE,
-                request.userData.statusCode || 0,
                 error instanceof Error ? error.message : String(error),
             )
             .catch((err) => {
