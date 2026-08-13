@@ -8,7 +8,7 @@ const DEFAULT_S3_BUCKET = 'furniture-crawler-storage';
 const DEFAULT_S3_REGION = 'eu-west-1';
 
 export default class AWSStorage extends PageStorage {
-    private static readonly region: string = process.env.AWS_REGION || DEFAULT_S3_REGION;
+    private static readonly region: string = process.env.AWS_DEFAULT_REGION || DEFAULT_S3_REGION;
     private static readonly bucket: string = process.env.AWS_S3_BUCKET || DEFAULT_S3_BUCKET;
     private static readonly s3: S3Client = new S3Client({ region: AWSStorage.region });
 
