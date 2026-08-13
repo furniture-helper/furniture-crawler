@@ -22,12 +22,13 @@
     "async-mutex": "^0.5.0",
     "camoufox-js": "^0.11.1",
     "crawlee": "^3.15.3",
+    "kafkajs": "^2.2.4",
     "pg": "^8.16.3",
     "pino": "^10.1.0",
     "playwright": "^1.57.0"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.9.5",
     "@types/pg": "^8.16.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",
