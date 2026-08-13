@@ -22,7 +22,7 @@ export class Queue {
         }
 
         this.sqsUrl = sqsUrl;
-        this.client = new SQSClient({ region: process.env.AWS_REGION ?? 'eu-west-1' });
+        this.client = new SQSClient({ region: process.env.AWS_DEFAULT_REGION ?? 'eu-west-1' });
     }
 
     public static async getMessages(): Promise<Message[]> {
