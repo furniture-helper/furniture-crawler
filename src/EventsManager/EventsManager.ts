@@ -10,12 +10,12 @@ export type CrawlEventData = {
     domain: string;
     duration: number;
     status: CrawlerEventStatus;
-    statusCode: number;
     error?: string | undefined;
 };
 
 export type CrawlEventMetadata = {
     host: string;
+    region: string;
 };
 
 export default abstract class EventsManager {
@@ -25,7 +25,6 @@ export default abstract class EventsManager {
         url: string,
         duration: number,
         status: CrawlerEventStatus,
-        statusCode: number,
         error?: string | undefined,
     ): Promise<void> {
         const event: CrawlEventData = {
@@ -33,12 +32,12 @@ export default abstract class EventsManager {
             domain: getDomainFromUrl(url),
             duration: duration,
             status: status,
-            statusCode: statusCode,
             error: error,
         };
 
         const metadata = {
             host: await this.getHost(),
+            region: await this.getRegion(),
         };
 
         await this.publish(event, metadata);
@@ -60,6 +59,10 @@ export default abstract class EventsManager {
         }
 
         return this.host || 'unknown';
+    }
+
+    private async getRegion(): Promise<string> {
+        return process.env.AWS_REGION || 'unknown';
     }
 
     private async getEcsTaskId(): Promise<string | undefined> {
