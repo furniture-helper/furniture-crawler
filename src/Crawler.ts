@@ -27,6 +27,8 @@ import { Queue } from './CrawlerQueue/Queue';
 import { getDomainFromUrl } from './utils/url_utils';
 import { AbortedRequestError } from './errors';
 import { extract_details_from_jsonld_schema } from './utils/json_ld_extraction_utils';
+import EventsManager, { CrawlerEventStatus } from './EventsManager/EventsManager';
+import KafkaEventsManager from './EventsManager/KafkaEventsManager';
 
 Configuration.set('systemInfoV2', true);
 Configuration.set('availableMemoryRatio', 0.8);
@@ -56,6 +58,8 @@ export default class Crawler {
     private readonly crawlerLog = new Log({
         level: log.LEVELS.INFO,
     });
+
+    private readonly eventsManager: EventsManager = new KafkaEventsManager();
 
     private constructor() {
         const originalError = this.crawlerLog.error.bind(this.crawlerLog);
@@ -176,7 +180,12 @@ export default class Crawler {
         this.crawler.stop(reason);
     }
 
-    private async requestHandler({ request, page }: PlaywrightCrawlingContext): Promise<void> {
+    private async requestHandler({ request, page, response }: PlaywrightCrawlingContext): Promise<void> {
+        const startTime = Date.now();
+        request.userData.startTime = startTime;
+
+        request.userData.statusCode = response?.status() ?? 0;
+
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
             await this.addToQueue();
@@ -194,8 +203,6 @@ export default class Crawler {
             await this.addToQueue();
             return;
         }
-
-        const startTime = Date.now();
 
         logger.debug(`Parsing page: ${request.loadedUrl}`);
 
@@ -251,6 +258,13 @@ export default class Crawler {
             logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
         });
 
+        const duration = Date.now() - startTime;
+        await this.eventsManager
+            .pushEvent(request.loadedUrl, duration, CrawlerEventStatus.SUCCESS, 200)
+            .catch((err) => {
+                logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
+            });
+
         await this.addToQueue();
     }
 
@@ -269,6 +283,22 @@ export default class Crawler {
             const domain = getDomainFromUrl(request.url);
             this.backoffDomains.set(domain, new Date());
         }
+
+        let duration = -1;
+        if (request.userData.startTime) {
+            duration = Date.now() - request.userData.startTime;
+        }
+        await this.eventsManager
+            .pushEvent(
+                request.url,
+                duration,
+                CrawlerEventStatus.FAILURE,
+                request.userData.statusCode || 0,
+                error instanceof Error ? error.message : String(error),
+            )
+            .catch((err) => {
+                logger.error(err, `Error pushing failure event for page: ${request.loadedUrl}`);
+            });
     }
 
     private async errorHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
