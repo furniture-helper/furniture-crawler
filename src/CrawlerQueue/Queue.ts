@@ -3,7 +3,6 @@ import logger from '../Logger';
 import { getMaxRequestsPerCrawl } from '../config';
 import { isBlacklistedUrl } from '../utils/crawler_utils';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
-import { getDomainFromUrl } from '../utils/url_utils';
 
 export type Message = {
     url: string;
@@ -47,12 +46,6 @@ export class Queue {
                 Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
 
                 const url = message.Body;
-                if (getDomainFromUrl(url) === 'barclays.lk') {
-                    await DatabaseUpsertQueue.setInactive(url);
-                    await this.deleteMessage(url);
-                    continue;
-                }
-
                 if (isBlacklistedUrl(url)) {
                     await DatabaseUpsertQueue.deleteFromDatabase(url);
                     await this.deleteMessage(url);
@@ -99,13 +92,6 @@ export class Queue {
                 Queue.receiptHandles.set(message.Body, message.ReceiptHandle);
 
                 const url = message.Body;
-
-                if (getDomainFromUrl(url) === 'barclays.lk') {
-                    await DatabaseUpsertQueue.setInactive(url);
-                    await this.deleteMessage(url);
-                    continue;
-                }
-
                 if (isBlacklistedUrl(url)) {
                     await DatabaseUpsertQueue.deleteFromDatabase(url);
                     await this.deleteMessage(url);
