@@ -102,7 +102,7 @@ export default class Crawler {
                 checkForBlackListedUrl.bind(instance),
                 instance.isInIgnoredDomain.bind(instance),
                 async ({}, gotoOptions) => {
-                    gotoOptions.timeout = 30_000; // 30s
+                    gotoOptions.timeout = getNavigationTimeoutSecs() * 1000;
                     gotoOptions.waitUntil = 'domcontentloaded';
                 },
                 async ({ page }) => {
