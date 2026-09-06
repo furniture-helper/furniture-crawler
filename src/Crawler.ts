@@ -135,6 +135,8 @@ export default class Crawler {
                 launcher: firefox,
                 launchOptions: camoufoxLaunchOptions,
             },
+            navigationTimeoutSecs: getNavigationTimeoutSecs(),
+            requestHandlerTimeoutSecs: getRequestHandlerTimeoutSecs(),
         });
 
         return instance;
