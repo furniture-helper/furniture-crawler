@@ -1,6 +1,7 @@
 import { Page } from 'playwright';
 import logger from '../Logger';
 import DatabaseUpsertQueue from '../db/DBUpsertQueue';
+import EventsManager from '../EventsManager/EventsManager';
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -247,7 +248,11 @@ async function upsertProductVariant(
     }
 }
 
-export async function extract_details_from_jsonld_schema(url: string, page: Page): Promise<void> {
+export async function extract_details_from_jsonld_schema(
+    url: string,
+    page: Page,
+    eventsManager: EventsManager,
+): Promise<void> {
     if (!(await has_json_ld_schema(page))) {
         logger.debug(`No JSON-LD schema found for ${url}`);
         return;
@@ -270,6 +275,8 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
     await DatabaseUpsertQueue.markAsProductPage(url, 'DIRECTLY_INFERRED').catch((err) => {
         logger.error(`Error marking as product page URL ${url}: ${err instanceof Error ? err.message : String(err)}`);
     });
+
+    await eventsManager.pushClassificationEvent(url, 'product');
 
     // ProductGroup with variants — upsert each variant individually
     if (product['@type'] === 'ProductGroup' && Array.isArray(product['hasVariant'])) {
@@ -295,6 +302,13 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
             }
 
             await upsertProductVariant(variantUrl, variantName, variantPrice, variantImage, variantInStock);
+            await eventsManager.pushExtractionEvent(
+                variantUrl,
+                variantName ?? '',
+                variantPrice ?? 0,
+                variantImage ?? '',
+                variantInStock ?? false,
+            );
         }
         return;
     }
@@ -313,4 +327,5 @@ export async function extract_details_from_jsonld_schema(url: string, page: Page
               : null;
 
     await upsertProductVariant(url, title, price, image, inStock);
+    await eventsManager.pushExtractionEvent(url, title ?? '', price ?? 0, image ?? '', inStock ?? false);
 }

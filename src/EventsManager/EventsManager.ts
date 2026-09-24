@@ -1,19 +1,43 @@
 import { getDomainFromUrl } from '../utils/url_utils';
+import Logger from '../Logger';
 
 export enum CrawlerEventStatus {
     SUCCESS = 'success',
     FAILURE = 'failure',
 }
 
-export type CrawlEventData = {
+export interface EventData {
     url: string;
     domain: string;
+}
+
+export type CrawlEventData = EventData & {
     duration: number;
     status: CrawlerEventStatus;
     error?: string | undefined;
 };
 
-export type CrawlEventMetadata = {
+export type ClassificationEventData = EventData & {
+    classification: string;
+    confidence: number;
+    source: string;
+};
+
+export type ExtractionEventData = EventData & {
+    productTitle: string;
+    productPrice: number;
+    productImageUrl: string;
+    inStock: boolean;
+    source: string;
+};
+
+export enum EventCategory {
+    CRAWL,
+    CLASSIFICATION,
+    EXTRACTION,
+}
+
+export type EventMetadata = {
     host: string;
     region: string;
 };
@@ -21,7 +45,7 @@ export type CrawlEventMetadata = {
 export default abstract class EventsManager {
     private host: string | undefined;
 
-    public async pushEvent(
+    public async pushCrawlEvent(
         url: string,
         duration: number,
         status: CrawlerEventStatus,
@@ -35,15 +59,57 @@ export default abstract class EventsManager {
             error: error,
         };
 
+        await this.publishEventWithMetadata(event, EventCategory.CRAWL);
+    }
+
+    public async pushClassificationEvent(url: string, classification: string): Promise<void> {
+        const event: ClassificationEventData = {
+            url: url,
+            domain: getDomainFromUrl(url),
+            classification: classification,
+            confidence: 1.0,
+            source: 'ecs_crawler',
+        };
+
+        await this.publishEventWithMetadata(event, EventCategory.CLASSIFICATION);
+    }
+
+    public async pushExtractionEvent(
+        url: string,
+        productTitle: string,
+        productPrice: number,
+        productImageUrl: string,
+        inStock: boolean,
+    ): Promise<void> {
+        const event: ExtractionEventData = {
+            url: url,
+            domain: getDomainFromUrl(url),
+            productTitle: productTitle,
+            productPrice: productPrice,
+            productImageUrl: productImageUrl,
+            inStock: inStock,
+            source: 'ecs_crawler',
+        };
+
+        await this.publishEventWithMetadata(event, EventCategory.EXTRACTION);
+    }
+
+    protected abstract publish(event: EventData, metadata: EventMetadata, category: EventCategory): Promise<void>;
+
+    private async publishEventWithMetadata(event: EventData, category: EventCategory): Promise<void> {
         const metadata = {
             host: await this.getHost(),
             region: await this.getRegion(),
         };
 
-        await this.publish(event, metadata);
+        try {
+            await this.publish(event, metadata, category);
+        } catch (error) {
+            Logger.error(
+                `Failed to publish event: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+            );
+        }
     }
-
-    protected abstract publish(event: CrawlEventData, metadata: CrawlEventMetadata): Promise<void>;
 
     private async getHost(): Promise<string> {
         if (this.host !== undefined) {
