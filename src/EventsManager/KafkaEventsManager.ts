@@ -1,8 +1,7 @@
 import { Kafka, KafkaConfig, Producer } from 'kafkajs';
-import EventsManager, { CrawlEventData, CrawlEventMetadata } from './EventsManager';
+import EventsManager, { EventCategory, EventData, EventMetadata } from './EventsManager';
 import Logger from '../Logger';
 
-const CRAWLER_EVENTS_TOPIC: string = process.env.CRAWLER_EVENTS_TOPIC!;
 const KAFKA_BROKER: string = process.env.KAFKA_BROKER!;
 
 export default class KafkaEventsManager extends EventsManager {
@@ -19,10 +18,11 @@ export default class KafkaEventsManager extends EventsManager {
         this.producer = kafka.producer();
     }
 
-    protected async publish(event: CrawlEventData, metadata: CrawlEventMetadata): Promise<void> {
+    protected async publish(event: EventData, metadata: EventMetadata, category: EventCategory): Promise<void> {
         await this.connect();
-        const result = await this.producer.send({
-            topic: CRAWLER_EVENTS_TOPIC,
+        const topic = await this.getKafkaTopicFromEventCategory(category);
+        await this.producer.send({
+            topic: topic,
             messages: [
                 {
                     value: JSON.stringify(event),
@@ -33,7 +33,7 @@ export default class KafkaEventsManager extends EventsManager {
                 },
             ],
         });
-        Logger.debug(`Published event to Kafka: ${JSON.stringify(result)}`);
+        Logger.debug(`Published event to Kafka topic ${topic}: ${JSON.stringify(event)}`);
     }
 
     private async connect(): Promise<void> {
@@ -41,5 +41,18 @@ export default class KafkaEventsManager extends EventsManager {
             this.connectPromise = this.producer.connect();
         }
         await this.connectPromise;
+    }
+
+    private async getKafkaTopicFromEventCategory(category: EventCategory): Promise<string> {
+        switch (category) {
+            case EventCategory.CRAWL:
+                return process.env.CRAWLER_EVENTS_TOPIC!;
+            case EventCategory.CLASSIFICATION:
+                return process.env.CLASSIFICATION_EVENTS_TOPIC!;
+            case EventCategory.EXTRACTION:
+                return process.env.EXTRACTION_EVENTS_TOPIC!;
+            default:
+                throw new Error(`Unknown event category: ${category}`);
+        }
     }
 }

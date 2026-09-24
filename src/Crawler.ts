@@ -254,14 +254,16 @@ export default class Crawler {
             logger.error(err, `Error adding new URLs from page: ${request.loadedUrl}`);
         });
 
-        await extract_details_from_jsonld_schema(request.loadedUrl, page).catch((err) => {
+        await extract_details_from_jsonld_schema(request.loadedUrl, page, this.eventsManager).catch((err) => {
             logger.error(err, `Error extracting JSON-LD details from page: ${request.loadedUrl}`);
         });
 
         const duration = Date.now() - startTime;
-        await this.eventsManager.pushEvent(request.loadedUrl, duration, CrawlerEventStatus.SUCCESS).catch((err) => {
-            logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
-        });
+        await this.eventsManager
+            .pushCrawlEvent(request.loadedUrl, duration, CrawlerEventStatus.SUCCESS)
+            .catch((err) => {
+                logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
+            });
 
         await this.addToQueue();
     }
@@ -287,7 +289,7 @@ export default class Crawler {
             duration = Date.now() - request.userData.startTime;
         }
         await this.eventsManager
-            .pushEvent(
+            .pushCrawlEvent(
                 request.url,
                 duration,
                 CrawlerEventStatus.FAILURE,
