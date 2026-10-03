@@ -101,9 +101,29 @@ export default class Crawler {
             preNavigationHooks: [
                 checkForBlackListedUrl.bind(instance),
                 instance.isInIgnoredDomain.bind(instance),
-                async ({}, gotoOptions) => {
+                async ({ page, request }, gotoOptions) => {
                     gotoOptions.timeout = getNavigationTimeoutSecs() * 1000;
                     gotoOptions.waitUntil = 'domcontentloaded';
+
+                    page.on('response', (response) => {
+                        if (response.status() !== 404) {
+                            return;
+                        }
+
+                        const requestUrl = request.url.replace(/\/+$/, '') || '/';
+                        const responseUrl = response.url().replace(/\/+$/, '') || '/';
+
+                        if (
+                            responseUrl === requestUrl ||
+                            responseUrl.startsWith(requestUrl) ||
+                            requestUrl.startsWith(responseUrl)
+                        ) {
+                            request.userData = {
+                                ...(request.userData || {}),
+                                statusCode: 404,
+                            };
+                        }
+                    });
                 },
                 async ({ page }) => {
                     await page.route('**/*', (route) => {
@@ -204,6 +224,13 @@ export default class Crawler {
             return;
         }
 
+        if (Number(request.userData?.statusCode) === 404) {
+            logger.info(`Page ${request.loadedUrl} returned HTTP 404; marking it inactive.`);
+            await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
+            return;
+        }
+
         logger.debug(`Parsing page: ${request.loadedUrl}`);
 
         // Abort loading of unnecessary resources to speed up page load
@@ -269,11 +296,11 @@ export default class Crawler {
     }
 
     private async failedRequestHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
-        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
 
+        await this.addToQueue();
         logger.error(error, `Request failed for ${request.url}`);
 
         if (
@@ -301,10 +328,11 @@ export default class Crawler {
     }
 
     private async errorHandler({ request }: PlaywrightCrawlingContext, error: unknown): Promise<void> {
-        await this.addToQueue();
         if (error instanceof AbortedRequestError) {
             return;
         }
+
+        await this.addToQueue();
 
         if (
             error instanceof Error &&
