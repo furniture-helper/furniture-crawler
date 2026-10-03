@@ -209,11 +209,21 @@ export default class Crawler {
         if (request.userData?.isDownload) {
             await this.removeFromQueueAndSetInactive(request.url);
             await this.addToQueue();
+            await this.eventsManager
+                .pushCrawlEvent(request.url, Date.now() - startTime, CrawlerEventStatus.FAILURE, 'Download request')
+                .catch((err) => {
+                    logger.error(err, `Error pushing event for download request: ${request.url}`);
+                });
             return;
         }
 
         if (request.skipNavigation) {
             await this.addToQueue();
+            await this.eventsManager
+                .pushCrawlEvent(request.url, Date.now() - startTime, CrawlerEventStatus.FAILURE, 'Skip navigation')
+                .catch((err) => {
+                    logger.error(err, `Error pushing event for skip navigation: ${request.url}`);
+                });
             return;
         }
 
@@ -221,6 +231,23 @@ export default class Crawler {
             logger.error(`No loaded URL for request: ${request.url}`);
             await this.removeFromQueueAndSetInactive(request.url);
             await this.addToQueue();
+            await this.eventsManager
+                .pushCrawlEvent(request.url, Date.now() - startTime, CrawlerEventStatus.FAILURE, 'No loaded URL')
+                .catch((err) => {
+                    logger.error(err, `Error pushing event for page: ${request.url}`);
+                });
+            return;
+        }
+
+        if (Number(request.userData?.statusCode) === 404) {
+            logger.info(`Page ${request.loadedUrl} returned HTTP 404; marking it inactive.`);
+            await this.removeFromQueueAndSetInactive(request.url);
+            await this.addToQueue();
+            await this.eventsManager
+                .pushCrawlEvent(request.loadedUrl, Date.now() - startTime, CrawlerEventStatus.FAILURE, 'HTTP 404')
+                .catch((err) => {
+                    logger.error(err, `Error pushing event for page: ${request.loadedUrl}`);
+                });
             return;
         }
 
@@ -253,6 +280,11 @@ export default class Crawler {
             logger.debug(`Skipping useless page: ${request.loadedUrl}`);
             await this.removeFromQueueAndSetInactive(request.url);
             await this.addToQueue();
+            await this.eventsManager
+                .pushCrawlEvent(request.loadedUrl, Date.now() - startTime, CrawlerEventStatus.FAILURE, 'Useless page')
+                .catch((err) => {
+                    logger.error(err, `Error pushing event for useless page: ${request.loadedUrl}`);
+                });
             return;
         }
 
