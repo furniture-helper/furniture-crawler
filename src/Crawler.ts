@@ -300,13 +300,6 @@ export default class Crawler {
             return;
         }
 
-        if (this.isInactive404Error(request, error)) {
-            request.noRetry = true;
-            logger.info(`Page ${request.url} returned 404; marking it inactive.`);
-            await this.removeFromQueueAndSetInactive(request.url);
-            return;
-        }
-
         await this.addToQueue();
         logger.error(error, `Request failed for ${request.url}`);
 
@@ -339,13 +332,6 @@ export default class Crawler {
             return;
         }
 
-        if (this.isInactive404Error(request, error)) {
-            request.noRetry = true;
-            logger.info(`Page ${request.url} returned 404; marking it inactive.`);
-            await this.removeFromQueueAndSetInactive(request.url);
-            return;
-        }
-
         await this.addToQueue();
 
         if (
@@ -356,25 +342,6 @@ export default class Crawler {
             const domain = getDomainFromUrl(request.url);
             this.backoffDomains.set(domain, new Date());
         }
-    }
-
-    private isInactive404Error({ userData }: PlaywrightCrawlingContext['request'], error: unknown): boolean {
-        const statusCode = (userData as Record<string, unknown> | undefined)?.statusCode;
-        if (statusCode === 404) {
-            return true;
-        }
-
-        if (!(error instanceof Error)) {
-            return false;
-        }
-
-        const message = error.message;
-        return (
-            message.includes('404') ||
-            message.includes('received 404 status code') ||
-            message.includes('ERR_HTTP_RESPONSE_CODE_FAILURE') ||
-            message.includes('Page.navigate: net::ERR_HTTP_RESPONSE_CODE_FAILURE')
-        );
     }
 
     private async addToQueue(): Promise<void> {
