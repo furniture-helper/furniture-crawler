@@ -8,8 +8,11 @@ const DEFAULT_PG_PORT = 5432;
 const DEFAULT_PG_USER = 'furniture_crawler';
 const DEFAULT_PG_PASSWORD = 'Test@123';
 const DEFAULT_PG_DATABASE = 'furniture_crawler';
+const RDS_IAM_TOKEN_TTL_MS = 15 * 60 * 1000;
+const RDS_IAM_TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
 
 let pool: Pool | undefined;
+let poolRefreshAt: number | undefined;
 
 async function createPool(): Promise<Pool> {
     const host = process.env.PG_HOST || DEFAULT_PG_HOST;
@@ -19,6 +22,8 @@ async function createPool(): Promise<Pool> {
     const password =
         process.env.PG_PASSWORD ||
         (shouldUseRdsIamToken ? await getRdsIamToken(host, port, username) : DEFAULT_PG_PASSWORD);
+
+    poolRefreshAt = shouldUseRdsIamToken && !process.env.PG_PASSWORD ? Date.now() + RDS_IAM_TOKEN_TTL_MS : undefined;
 
     return new Pool({
         host,
@@ -34,11 +39,19 @@ async function createPool(): Promise<Pool> {
 }
 
 export async function getPgClient(): Promise<PoolClient> {
-    if (!pool) {
+    if (!pool || shouldRefreshPool()) {
+        if (pool) {
+            logger.info('Refreshing PostgreSQL pool before IAM token expiry');
+            await pool.end();
+        }
         pool = await createPool();
     }
 
     return await pool.connect();
+}
+
+function shouldRefreshPool(): boolean {
+    return !!poolRefreshAt && Date.now() >= poolRefreshAt - RDS_IAM_TOKEN_REFRESH_BUFFER_MS;
 }
 
 async function getRdsIamToken(host: string, port: number, username: string): Promise<string> {
